@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "423357722783",
+    "project_id": "kotton-kandy-beauty-bar",
+    "storage_bucket": "kotton-kandy-beauty-bar.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:423357722783:android:d8f1c5715b484fbbd632aa",
+        "android_client_info": {
+          "package_name": "com.example.kottonkandy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChmwoi-7ZdMTIWuig7bh-JyWj2qu9R6k4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
