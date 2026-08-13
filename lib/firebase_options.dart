@@ -41,46 +41,44 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyC6-JxVBuoEQME1j2NS8Aa4wTl-5DZG8yI',
-    appId: '1:423357722783:web:4b882a0b5b923a06d632aa',
-    messagingSenderId: '423357722783',
-    projectId: 'kotton-kandy-beauty-bar',
-    authDomain: 'kotton-kandy-beauty-bar.firebaseapp.com',
-    storageBucket: 'kotton-kandy-beauty-bar.firebasestorage.app',
+    apiKey: 'AIzaSyDMYIUD3vMTyuBhgIzwh-CQGh0Bi8jy_ug',
+    appId: '1:62972437754:web:3ee50a514d05c385bf5543',
+    messagingSenderId: '62972437754',
+    projectId: 'kotton-kandy',
+    authDomain: 'kotton-kandy.firebaseapp.com',
+    storageBucket: 'kotton-kandy.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyChmwoi-7ZdMTIWuig7bh-JyWj2qu9R6k4',
-    appId: '1:423357722783:android:d8f1c5715b484fbbd632aa',
-    messagingSenderId: '423357722783',
-    projectId: 'kotton-kandy-beauty-bar',
-    storageBucket: 'kotton-kandy-beauty-bar.firebasestorage.app',
+    apiKey: 'AIzaSyBVY612KiORqjetK3JV6P-s3HuhcC3ArJI',
+    appId: '1:62972437754:android:d54272021c49b850bf5543',
+    messagingSenderId: '62972437754',
+    projectId: 'kotton-kandy',
+    storageBucket: 'kotton-kandy.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCb8qg1tj4NFDwAvgb57ZUWJYaql5oiHa4',
-    appId: '1:423357722783:ios:38026b14c43588c9d632aa',
-    messagingSenderId: '423357722783',
-    projectId: 'kotton-kandy-beauty-bar',
-    storageBucket: 'kotton-kandy-beauty-bar.firebasestorage.app',
+    apiKey: 'AIzaSyA-dg1BqpTUcQ5heBEfulqCbm79FsoXT5Y',
+    appId: '1:62972437754:ios:059fdb979122bdeabf5543',
+    messagingSenderId: '62972437754',
+    projectId: 'kotton-kandy',
+    storageBucket: 'kotton-kandy.firebasestorage.app',
     iosBundleId: 'com.example.kottonkandy',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyCb8qg1tj4NFDwAvgb57ZUWJYaql5oiHa4',
-    appId: '1:423357722783:ios:38026b14c43588c9d632aa',
-    messagingSenderId: '423357722783',
-    projectId: 'kotton-kandy-beauty-bar',
-    storageBucket: 'kotton-kandy-beauty-bar.firebasestorage.app',
+    apiKey: 'AIzaSyA-dg1BqpTUcQ5heBEfulqCbm79FsoXT5Y',
+    appId: '1:62972437754:ios:059fdb979122bdeabf5543',
+    messagingSenderId: '62972437754',
+    projectId: 'kotton-kandy',
+    storageBucket: 'kotton-kandy.firebasestorage.app',
     iosBundleId: 'com.example.kottonkandy',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyC6-JxVBuoEQME1j2NS8Aa4wTl-5DZG8yI',
-    appId: '1:423357722783:web:8f8254ce15e743d2d632aa',
-    messagingSenderId: '423357722783',
-    projectId: 'kotton-kandy-beauty-bar',
-    authDomain: 'kotton-kandy-beauty-bar.firebaseapp.com',
-    storageBucket: 'kotton-kandy-beauty-bar.firebasestorage.app',
+    apiKey: 'AIzaSyDMYIUD3vMTyuBhgIzwh-CQGh0Bi8jy_ug',
+    appId: '1:62972437754:web:25af28d42c4ae4bbbf5543',
+    messagingSenderId: '62972437754',
+    projectId: 'kotton-kandy',
+    authDomain: 'kotton-kandy.firebaseapp.com',
+    storageBucket: 'kotton-kandy.firebasestorage.app',
   );
 }
