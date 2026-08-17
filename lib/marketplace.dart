@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'booking_page.dart';
+
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
 
@@ -2618,7 +2620,7 @@ class _MarketplaceScreenState
         return _buildDashboard();
 
       case 1:
-        return _buildBookings();
+        return const BookingPage();
 
       case 2:
         return _buildMessages();
