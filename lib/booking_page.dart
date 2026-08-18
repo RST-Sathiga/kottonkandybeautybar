@@ -1,493 +1,570 @@
-import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
-import 'booking_service.dart';
-import 'date_selector.dart';
-import 'service_card.dart';
-import 'time_selector.dart';
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BookingPage extends StatefulWidget {
-  const BookingPage({super.key});
+  final Map<String, dynamic>? preselectedService;
+
+  const BookingPage({super.key, this.preselectedService});
 
   @override
   State<BookingPage> createState() => _BookingPageState();
 }
 
 class _BookingPageState extends State<BookingPage> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // ============================================================
+  // FIREBASE & AUTH
+  // ============================================================
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  DateTime selectedDate = DateTime.now();
+  // ============================================================
+  // COLOURS
+  // ============================================================
+  static const Color primaryPurple = Color(0xFF6B3A82);
+  static const Color lightPurple = Color(0xFFF3EAF6);
 
-  String? selectedTime;
+  // ============================================================
+  // STATE VARIABLES
+  // ============================================================
+  String _selectedCategory = 'Press-ons';
+  Map<String, dynamic>? _selectedService;
+  DateTime? _selectedDate;
+  String? _selectedTimeSlot;
+  bool _isLoading = false;
 
-  BookingService? selectedService;
+  final List<String> _categories = [
+    'Press-ons',
+    'Lashes',
+    'Hair',
+    'Makeup'
+  ];
 
-  bool isBooking = false;
+  // ============================================================
+  // SAMPLE SALON SERVICES
+  // ============================================================
+  final List<Map<String, dynamic>> _salonServices = [
+    {
+      'id': 'press_on_install',
+      'name': 'Custom Press-On Installation',
+      'category': 'Press-ons',
+      'description':
+      'Professional sizing, prep, and application of premium press-on nails.',
+      'price': 180.00,
+      'duration': '45 mins',
+      'icon': Icons.back_hand,
+    },
+    {
+      'id': 'nail_art_addon',
+      'name': 'Deluxe Nail Art & Gems',
+      'category': 'Press-ons',
+      'description': 'Intricate hand-painted art and crystal placement.',
+      'price': 120.00,
+      'duration': '30 mins',
+      'icon': Icons.brush,
+    },
+    {
+      'id': 'classic_lashes',
+      'name': 'Classic Lash Extensions',
+      'category': 'Lashes',
+      'description':
+      'Natural-looking individual lash extensions for everyday elegance.',
+      'price': 350.00,
+      'duration': '1 hour 30 mins',
+      'icon': Icons.visibility,
+    },
+    {
+      'id': 'volume_lashes',
+      'name': 'Russian Volume Lashes',
+      'category': 'Lashes',
+      'description': 'Full, fluffy, and glamorous multi-lash handmade fans.',
+      'price': 480.00,
+      'duration': '2 hours',
+      'icon': Icons.visibility_outlined,
+    },
+    {
+      'id': 'silk_press',
+      'name': 'Signature Silk Press',
+      'category': 'Hair',
+      'description':
+      'Smooth, silky blowout and straightening for natural hair.',
+      'price': 400.00,
+      'duration': '1 hour 30 mins',
+      'icon': Icons.face,
+    },
+    {
+      'id': 'cornrows_styling',
+      'name': 'Protective Cornrows',
+      'category': 'Hair',
+      'description':
+      'Clean, neat protective styling with extensions optional.',
+      'price': 300.00,
+      'duration': '1 hour',
+      'icon': Icons.spa,
+    },
+    {
+      'id': 'full_face_makeup',
+      'name': 'Glam Full Face Makeup',
+      'category': 'Makeup',
+      'description':
+      'Flawless foundation, eyeshadow art, contour, and lashes included.',
+      'price': 450.00,
+      'duration': '1 hour',
+      'icon': Icons.auto_fix_high,
+    },
+  ];
 
-  String get dateKey {
-    final String year = selectedDate.year.toString();
+  // ============================================================
+  // AVAILABLE TIME SLOTS
+  // ============================================================
+  final List<String> _timeSlots = [
+    '09:00 AM',
+    '10:30 AM',
+    '12:00 PM',
+    '01:30 PM',
+    '03:00 PM',
+    '04:30 PM',
+  ];
 
-    final String month =
-    selectedDate.month.toString().padLeft(2, '0');
+  @override
+  void initState() {
+    super.initState();
 
-    final String day =
-    selectedDate.day.toString().padLeft(2, '0');
-
-    return '$year-$month-$day';
-  }
-
-  String get formattedDate {
-    return '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}';
-  }
-
-  String get bookingDocumentId {
-    return '${dateKey}_${selectedTime!.replaceAll(':', '-')}';
-  }
-
-  Stream<QuerySnapshot<Map<String, dynamic>>> get bookedTimesStream {
-    return _firestore
-        .collection('bookings')
-        .where('dateKey', isEqualTo: dateKey)
-        .snapshots();
-  }
-
-  bool isTimeBooked(
-      AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot,
-      String time,
-      ) {
-    if (!snapshot.hasData) {
-      return false;
+    if (widget.preselectedService != null) {
+      _selectedService = widget.preselectedService;
+      _selectedCategory =
+          widget.preselectedService!['category'] ?? 'Press-ons';
     }
-
-    return snapshot.data!.docs.any(
-          (doc) => doc.data()['time'] == time,
-    );
   }
 
-  Future<void> confirmBooking() async {
-    if (_auth.currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please log in before making a booking.',
+  // ============================================================
+  // SHOW MESSAGE
+  // ============================================================
+  void _showMessage(String message, {bool isError = true}) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor:
+          isError ? Colors.red.shade700 : Colors.green.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       );
+  }
+
+  // ============================================================
+  // SUBMIT BOOKING
+  // ============================================================
+  Future<void> _submitBooking() async {
+    if (_selectedService == null) {
+      _showMessage('Please select a service.');
       return;
     }
 
-    if (selectedService == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please select a service.',
-          ),
-        ),
-      );
+    if (_selectedDate == null) {
+      _showMessage('Please select an appointment date.');
       return;
     }
 
-    if (selectedTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please select an appointment time.',
-          ),
-        ),
-      );
+    if (_selectedTimeSlot == null) {
+      _showMessage('Please select a time slot.');
+      return;
+    }
+
+    final User? user = _auth.currentUser;
+
+    if (user == null) {
+      _showMessage('You must be logged in to book an appointment.');
       return;
     }
 
     setState(() {
-      isBooking = true;
+      _isLoading = true;
     });
 
     try {
-      final User user = _auth.currentUser!;
+      await _firestore.runTransaction((transaction) async {
+        final querySnapshot = await _firestore
+            .collection('appointments')
+            .where(
+          'date',
+          isEqualTo:
+          _selectedDate!.toIso8601String().split('T')[0],
+        )
+            .where('timeSlot', isEqualTo: _selectedTimeSlot)
+            .get();
 
-      final String bookingId = bookingDocumentId;
-
-      final DocumentReference<Map<String, dynamic>> bookingRef =
-      _firestore.collection('bookings').doc(bookingId);
-
-      await _firestore.runTransaction(
-            (transaction) async {
-          final DocumentSnapshot<Map<String, dynamic>> bookingSnapshot =
-          await transaction.get(bookingRef);
-
-          if (bookingSnapshot.exists) {
-            throw Exception(
-              'This appointment time has already been booked.',
-            );
-          }
-
-          transaction.set(
-            bookingRef,
-            {
-              'bookingId': bookingId,
-
-              'customerId': user.uid,
-
-              'customerEmail': user.email ?? '',
-
-              'customerName':
-              user.displayName ?? 'Customer',
-
-              'service': selectedService!.name,
-
-              'price': selectedService!.price,
-
-              'date': Timestamp.fromDate(
-                DateTime(
-                  selectedDate.year,
-                  selectedDate.month,
-                  selectedDate.day,
-                ),
-              ),
-
-              'dateKey': dateKey,
-
-              'time': selectedTime,
-
-              'status': 'pending',
-
-              'createdAt': FieldValue.serverTimestamp(),
-
-              'updatedAt': FieldValue.serverTimestamp(),
-            },
+        if (querySnapshot.docs.isNotEmpty) {
+          throw Exception(
+            'This time slot is already booked. Please choose another time.',
           );
-        },
-      );
+        }
 
-      if (!mounted) {
-        return;
-      }
+        final docRef = _firestore.collection('appointments').doc();
 
-      setState(() {
-        isBooking = false;
+        transaction.set(docRef, {
+          'id': docRef.id,
+          'userId': user.uid,
+          'userEmail': user.email ?? 'Unknown',
+          'serviceName': _selectedService!['name'],
+          'category': _selectedService!['category'],
+          'price': _selectedService!['price'],
+          'duration': _selectedService!['duration'],
+          'date': _selectedDate!.toIso8601String().split('T')[0],
+          'timeSlot': _selectedTimeSlot,
+          'status': 'Confirmed',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
       });
 
-      await showDialog(
+      if (!mounted) return;
+
+      showDialog(
         context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text(
-              'Booking Confirmed',
-            ),
-            content: Text(
-              'Your appointment has been successfully booked.\n\n'
-                  'Service: ${selectedService!.name}\n'
-                  'Price: R${selectedService!.price.toStringAsFixed(0)}\n'
-                  'Date: $formattedDate\n'
-                  'Time: $selectedTime\n\n'
-                  'Status: Pending confirmation',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-                child: const Text('OK'),
+        builder: (context) => AlertDialog(
+          title: const Text('Booking Confirmed!'),
+          content: Text(
+            'Your appointment for ${_selectedService!['name']} on '
+                '${_selectedDate!.toIso8601String().split('T')[0]} at '
+                '$_selectedTimeSlot has been successfully booked.',
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryPurple,
+                foregroundColor: Colors.white,
               ),
-            ],
-          );
-        },
-      );
+              onPressed: () {
+                Navigator.pop(context);
 
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        selectedTime = null;
-        selectedService = null;
-      });
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        isBooking = false;
-      });
-
-      String message =
-          'Something went wrong. Please try again.';
-
-      if (e.toString().contains(
-        'already been booked',
-      )) {
-        message =
-        'Sorry, this time has just been booked by another customer. Please choose another time.';
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
+                setState(() {
+                  _selectedService = null;
+                  _selectedDate = null;
+                  _selectedTimeSlot = null;
+                });
+              },
+              child: const Text('OK'),
+            ),
+          ],
         ),
       );
+    } catch (e) {
+      _showMessage(
+        e.toString().replaceAll('Exception: ', ''),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
+  // ============================================================
+  // BUILD UI
+  // ============================================================
   @override
   Widget build(BuildContext context) {
+    final filteredServices = _salonServices
+        .where((service) => service['category'] == _selectedCategory)
+        .toList();
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF9F7FA),
       appBar: AppBar(
         title: const Text(
-          'Book Appointment',
+          'Book an Appointment',
           style: TextStyle(
+            color: Colors.black,
             fontWeight: FontWeight.bold,
           ),
         ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black),
       ),
+      body: _isLoading
+          ? const Center(
+        child: CircularProgressIndicator(
+          color: primaryPurple,
+        ),
+      )
+          : SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // =====================================================
+            // CATEGORY
+            // =====================================================
+            const Text(
+              'Select Category',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
 
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: bookedTimesStream,
+            const SizedBox(height: 12),
 
-        builder: (
-            context,
-            snapshot,
-            ) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
+            SizedBox(
+              height: 45,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _categories.length,
+                itemBuilder: (context, index) {
+                  final category = _categories[index];
+                  final isSelected =
+                      category == _selectedCategory;
 
-            child: Column(
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
-
-              children: [
-                const Text(
-                  'Choose a Date',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius:
-                    BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.grey.shade200,
-                    ),
-                  ),
-
-                  child: DateSelector(
-                    selectedDate: selectedDate,
-
-                    onDateSelected: (date) {
-                      setState(() {
-                        selectedDate = date;
-                        selectedTime = null;
-                      });
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 28),
-
-                const Text(
-                  'Choose a Time',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-
-                const SizedBox(height: 6),
-
-                const Text(
-                  'Available times are from 09:00 to 16:00.',
-                  style: TextStyle(
-                    color: Colors.black54,
-                    fontSize: 14,
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                TimeSelector(
-                  selectedTime: selectedTime,
-
-                  bookedTimes: snapshot.hasData
-                      ? snapshot.data!.docs
-                      .map(
-                        (doc) =>
-                    doc.data()['time']
-                    as String?,
-                  )
-                      .whereType<String>()
-                      .toSet()
-                      : {},
-
-                  onTimeSelected: (time) {
-                    setState(() {
-                      selectedTime = time;
-                    });
-                  },
-                ),
-
-                const SizedBox(height: 28),
-
-                const Text(
-                  'Choose a Service',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                ...bookingServices.map(
-                      (service) {
-                    return ServiceCard(
-                      service: service,
-
-                      selected:
-                      selectedService == service,
-
-                      onTap: () {
+                  return Padding(
+                    padding:
+                    const EdgeInsets.only(right: 10),
+                    child: ChoiceChip(
+                      label: Text(category),
+                      selected: isSelected,
+                      selectedColor: primaryPurple,
+                      backgroundColor: Colors.white,
+                      labelStyle: TextStyle(
+                        color: isSelected
+                            ? Colors.white
+                            : Colors.black87,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      onSelected: (selected) {
                         setState(() {
-                          selectedService =
-                              service;
+                          _selectedCategory = category;
                         });
                       },
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 10),
-
-                if (selectedService != null ||
-                    selectedTime != null)
-                  Container(
-                    width: double.infinity,
-
-                    padding:
-                    const EdgeInsets.all(18),
-
-                    decoration: BoxDecoration(
-                      color:
-                      const Color(0xFFF8F8F8),
-
-                      borderRadius:
-                      BorderRadius.circular(16),
                     ),
-
-                    child: Column(
-                      crossAxisAlignment:
-                      CrossAxisAlignment.start,
-
-                      children: [
-                        const Text(
-                          'Booking Summary',
-                          style: TextStyle(
-                            fontSize: 19,
-                            fontWeight:
-                            FontWeight.bold,
-                          ),
-                        ),
-
-                        const SizedBox(
-                          height: 14,
-                        ),
-
-                        Text(
-                          'Date: $formattedDate',
-                          style:
-                          const TextStyle(
-                            fontSize: 15,
-                          ),
-                        ),
-
-                        const SizedBox(
-                          height: 6,
-                        ),
-
-                        Text(
-                          'Time: ${selectedTime ?? 'Not selected'}',
-                          style:
-                          const TextStyle(
-                            fontSize: 15,
-                          ),
-                        ),
-
-                        const SizedBox(
-                          height: 6,
-                        ),
-
-                        Text(
-                          'Service: ${selectedService?.name ?? 'Not selected'}',
-                          style:
-                          const TextStyle(
-                            fontSize: 15,
-                          ),
-                        ),
-
-                        const SizedBox(
-                          height: 6,
-                        ),
-
-                        if (selectedService !=
-                            null)
-                          Text(
-                            'Total: R${selectedService!.price.toStringAsFixed(0)}',
-
-                            style:
-                            const TextStyle(
-                              fontSize: 17,
-                              fontWeight:
-                              FontWeight.bold,
-                              color:
-                              Color(0xFFE91E63),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-
-                const SizedBox(height: 25),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 55,
-
-                  child: ElevatedButton(
-                    onPressed:
-                    isBooking
-                        ? null
-                        : confirmBooking,
-
-                    child: isBooking
-                        ? const SizedBox(
-                      width: 24,
-                      height: 24,
-
-                      child:
-                      CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color:
-                        Colors.white,
-                      ),
-                    )
-                        : const Text(
-                      'Confirm Booking',
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-              ],
+                  );
+                },
+              ),
             ),
-          );
-        },
+
+            const SizedBox(height: 25),
+
+            // =====================================================
+            // SERVICES
+            // =====================================================
+            const Text(
+              'Select Service',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            ...filteredServices.map((service) {
+              final isSelected =
+                  _selectedService?['id'] == service['id'];
+
+              return Container(
+                margin:
+                const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color:
+                  isSelected ? lightPurple : Colors.white,
+                  borderRadius:
+                  BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isSelected
+                        ? primaryPurple
+                        : Colors.transparent,
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                      Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: ListTile(
+                  onTap: () {
+                    setState(() {
+                      _selectedService = service;
+                    });
+                  },
+                  leading: CircleAvatar(
+                    backgroundColor: lightPurple,
+                    child: Icon(
+                      service['icon'] as IconData,
+                      color: primaryPurple,
+                    ),
+                  ),
+                  title: Text(
+                    service['name'],
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${service['description']}\nDuration: ${service['duration']}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  isThreeLine: true,
+                  trailing: Text(
+                    'R${(service['price'] as num).toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: primaryPurple,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              );
+            }),
+
+            const SizedBox(height: 20),
+
+            // =====================================================
+            // DATE PICKER
+            // =====================================================
+            const Text(
+              'Select Date',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            InkWell(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: DateTime.now(),
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime.now().add(
+                    const Duration(days: 60),
+                  ),
+                );
+
+                if (picked != null) {
+                  setState(() {
+                    _selectedDate = picked;
+                  });
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius:
+                  BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_today,
+                      color: primaryPurple,
+                    ),
+                    const SizedBox(width: 15),
+                    Text(
+                      _selectedDate == null
+                          ? 'Tap to choose appointment date'
+                          : _selectedDate!
+                          .toIso8601String()
+                          .split('T')[0],
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: _selectedDate == null
+                            ? Colors.grey
+                            : Colors.black87,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 25),
+
+            // =====================================================
+            // TIME SLOTS
+            // =====================================================
+            const Text(
+              'Select Time Slot',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: _timeSlots.map((slot) {
+                final isSelected =
+                    _selectedTimeSlot == slot;
+
+                return ChoiceChip(
+                  label: Text(slot),
+                  selected: isSelected,
+                  selectedColor: primaryPurple,
+                  backgroundColor: Colors.white,
+                  labelStyle: TextStyle(
+                    color: isSelected
+                        ? Colors.white
+                        : Colors.black87,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  onSelected: (selected) {
+                    setState(() {
+                      _selectedTimeSlot = slot;
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+
+            const SizedBox(height: 35),
+
+            // =====================================================
+            // CONFIRM BUTTON
+            // =====================================================
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: _submitBooking,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryPurple,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius:
+                    BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text(
+                  'CONFIRM APPOINTMENT',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
