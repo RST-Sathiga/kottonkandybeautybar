@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'client_chat_system.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
@@ -2513,65 +2514,9 @@ class _MarketplaceScreenState
   // ============================================================
 
   Widget _buildMessages() {
-    return Scaffold(
-      backgroundColor:
-      const Color(0xFFF9F7FA),
-      appBar: AppBar(
-        title:
-        const Text(
-          'Messages',
-          style:
-          TextStyle(
-            color: Colors.black,
-            fontWeight:
-            FontWeight.bold,
-          ),
-        ),
-        backgroundColor:
-        Colors.white,
-        elevation: 0,
-      ),
-      body: Center(
-        child: Padding(
-          padding:
-          const EdgeInsets.all(30),
-          child: Column(
-            mainAxisAlignment:
-            MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.chat_bubble_outline,
-                size: 70,
-                color:
-                Colors.grey[400],
-              ),
-              const SizedBox(
-                  height: 15),
-              const Text(
-                'No messages',
-                style:
-                TextStyle(
-                  fontSize: 20,
-                  fontWeight:
-                  FontWeight.bold,
-                ),
-              ),
-              const SizedBox(
-                  height: 8),
-              Text(
-                'Messages from Kotton Kandy will appear here.',
-                textAlign:
-                TextAlign.center,
-                style:
-                TextStyle(
-                  color:
-                  Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return const ChatScreen(
+      salonId: 'kotton_kandy',
+      salonName: 'Kotton Kandy',
     );
   }
 
