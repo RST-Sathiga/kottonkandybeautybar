@@ -21,6 +21,9 @@ dependencies:
   google_sign_in: ^6.2.1
   firebase_database: ^12.4.7
 
+  # Remember Me / Local Storage
+  shared_preferences: ^2.5.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
