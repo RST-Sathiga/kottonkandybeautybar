@@ -13,7 +13,7 @@ class MarketplaceScreen extends StatefulWidget {
 }
 
 class _MarketplaceScreenState extends State<MarketplaceScreen> {
-  // ============================================================
+  // ==========================================================
   // FIREBASE
   // ============================================================
 
