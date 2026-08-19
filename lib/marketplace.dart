@@ -173,6 +173,92 @@ class _MarketplaceScreenState
       'duration': '1 hr',
       'icon': Icons.water_drop,
     },
+
+    // ------------------------------------------------------------
+    // HAIR CARE PRODUCTS
+    // ------------------------------------------------------------
+
+    {
+      'id': 'aki_shampoo',
+      'name': 'Aki Asili Clarifying Shampoo',
+      'category': 'Hair',
+      'description':
+      'Deep cleansing shampoo formulated to eliminate build-up.',
+      'price': 150.00,
+      'duration': 'Product',
+      'isProduct': true,
+      'icon': Icons.water_drop,
+      'image': 'assets/images/shampoo.jpeg',
+    },
+
+    {
+      'id': 'hair_spray',
+      'name': 'Aki Asili Hair Spray',
+      'category': 'Hair',
+      'description':
+      'Lightweight hold spray to lock in styles and reduce frizz.',
+      'price': 90.00,
+      'duration': 'Product',
+      'isProduct': true,
+      'icon': Icons.air,
+      'image': 'assets/images/hair_spary.jpeg',
+    },
+
+    {
+      'id': 'creamy_hair_food',
+      'name': 'Aki Asili Creamy Hair Food',
+      'category': 'Hair',
+      'description':
+      'Nourishing formula that seals in moisture and adds shine.',
+      'price': 120.00,
+      'duration': 'Product',
+      'isProduct': true,
+      'icon': Icons.spa,
+      'image': 'assets/images/creamy_hair_food.jpeg',
+    },
+
+    {
+      'id': 'protein_conditioner',
+      'name': 'Aki Asili Protein Conditioner',
+      'category': 'Hair',
+      'description':
+      'Restorative treatment to strengthen and repair damaged hair.',
+      'price': 180.00,
+      'duration': 'Product',
+      'isProduct': true,
+      'icon': Icons.sanitizer,
+      'image': 'assets/images/protien_conditioner.jpeg',
+    },
+
+    // ------------------------------------------------------------
+    // PRESS-ON NAILS
+    // ------------------------------------------------------------
+
+    {
+      'id': 'french_tip_nails',
+      'name': 'Classic French Tip Press-Ons',
+      'category': 'Nails',
+      'description':
+      'Elegant and timeless French tip press-on nails with adhesive.',
+      'price': 150.00,
+      'duration': 'Product',
+      'isProduct': true,
+      'icon': Icons.back_hand,
+      'image': 'assets/images/nails.jpeg',
+    },
+
+    {
+      'id': 'matte_nude_nails',
+      'name': 'Matte Nude Press-On Nails',
+      'category': 'Nails',
+      'description':
+      'Sophisticated matte nude finish for everyday wear.',
+      'price': 130.00,
+      'duration': 'Product',
+      'isProduct': true,
+      'icon': Icons.back_hand,
+      'image': 'assets/images/matte_nails.jpeg',
+    },
   ];
 
   // ============================================================
@@ -559,208 +645,299 @@ class _MarketplaceScreenState
   void _showServiceDetails(
       Map<String, dynamic> service,
       ) {
+    final bool isNails =
+        service['category'] == 'Nails' &&
+            service['isProduct'] == true;
+
+    final String? imagePath =
+    service['image'];
+
+    bool includeInstallation = false;
+
+    final double basePrice =
+    (service['price'] as num).toDouble();
+
+    const double installationFee = 50.00;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return Container(
-          padding:
-          const EdgeInsets.all(24),
-          decoration:
-          const BoxDecoration(
-            color: Colors.white,
-            borderRadius:
-            BorderRadius.vertical(
-              top: Radius.circular(28),
-            ),
-          ),
-          child: SafeArea(
-            child: Column(
-              mainAxisSize:
-              MainAxisSize.min,
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 45,
-                    height: 5,
-                    decoration:
-                    BoxDecoration(
-                      color:
-                      Colors.grey[300],
-                      borderRadius:
-                      BorderRadius
-                          .circular(10),
-                    ),
-                  ),
+        return StatefulBuilder(
+          builder: (
+              context,
+              setModalState,
+              ) {
+            final double currentTotal =
+                basePrice +
+                    (includeInstallation && isNails
+                        ? installationFee
+                        : 0);
+
+            return Container(
+              padding:
+              const EdgeInsets.all(24),
+              decoration:
+              const BoxDecoration(
+                color: Colors.white,
+                borderRadius:
+                BorderRadius.vertical(
+                  top: Radius.circular(28),
                 ),
-
-                const SizedBox(
-                    height: 25),
-
-                Container(
-                  height: 100,
-                  width:
-                  double.infinity,
-                  decoration:
-                  BoxDecoration(
-                    color: lightPurple,
-                    borderRadius:
-                    BorderRadius
-                        .circular(20),
-                  ),
-                  child: Icon(
-                    service['icon']
-                    as IconData,
-                    size: 55,
-                    color:
-                    primaryPurple,
-                  ),
-                ),
-
-                const SizedBox(
-                    height: 20),
-
-                Text(
-                  service['name']
-                      .toString(),
-                  style:
-                  const TextStyle(
-                    fontSize: 24,
-                    fontWeight:
-                    FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-
-                const SizedBox(
-                    height: 8),
-
-                Text(
-                  service['description']
-                      .toString(),
-                  style:
-                  TextStyle(
-                    fontSize: 15,
-                    color:
-                    Colors.grey[700],
-                  ),
-                ),
-
-                const SizedBox(
-                    height: 18),
-
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.access_time,
-                      color:
-                      primaryPurple,
-                    ),
-                    const SizedBox(
-                        width: 8),
-                    Text(
-                      service['duration']
-                          .toString(),
-                      style:
-                      const TextStyle(
-                        fontWeight:
-                        FontWeight.w600,
+              ),
+              child: SafeArea(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize:
+                    MainAxisSize.min,
+                    crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 45,
+                          height: 5,
+                          decoration:
+                          BoxDecoration(
+                            color:
+                            Colors.grey[300],
+                            borderRadius:
+                            BorderRadius
+                                .circular(10),
+                          ),
+                        ),
                       ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      'R${(service['price'] as num).toStringAsFixed(2)}',
-                      style:
-                      const TextStyle(
-                        fontSize: 20,
-                        fontWeight:
-                        FontWeight.bold,
-                        color:
-                        primaryPurple,
-                      ),
-                    ),
-                  ],
-                ),
 
-                const SizedBox(
-                    height: 24),
+                      const SizedBox(
+                          height: 25),
 
-                Row(
-                  children: [
-                    Expanded(
-                      child:
-                      OutlinedButton(
-                        onPressed: () {
-                          Navigator.pop(
-                              context);
-                          _addToCart(
-                              service);
-                        },
-                        style:
-                        OutlinedButton
-                            .styleFrom(
-                          foregroundColor:
+                      Container(
+                        height: imagePath != null ? 180 : 100,
+                        width:
+                        double.infinity,
+                        decoration:
+                        BoxDecoration(
+                          color: lightPurple,
+                          borderRadius:
+                          BorderRadius
+                              .circular(20),
+                          image: imagePath != null
+                              ? DecorationImage(
+                            image: AssetImage(
+                              imagePath,
+                            ),
+                            fit: BoxFit.cover,
+                          )
+                              : null,
+                        ),
+                        child: imagePath != null
+                            ? null
+                            : Icon(
+                          service['icon']
+                          as IconData,
+                          size: 55,
+                          color:
                           primaryPurple,
-                          side:
-                          const BorderSide(
+                        ),
+                      ),
+
+                      const SizedBox(
+                          height: 20),
+
+                      Text(
+                        service['name']
+                            .toString(),
+                        style:
+                        const TextStyle(
+                          fontSize: 24,
+                          fontWeight:
+                          FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+
+                      const SizedBox(
+                          height: 8),
+
+                      Text(
+                        service['description']
+                            .toString(),
+                        style:
+                        TextStyle(
+                          fontSize: 15,
+                          color:
+                          Colors.grey[700],
+                        ),
+                      ),
+
+                      const SizedBox(
+                          height: 18),
+
+                      Row(
+                        children: [
+                          Icon(
+                            service['isProduct'] == true
+                                ? Icons.inventory_2
+                                : Icons.access_time,
                             color:
                             primaryPurple,
                           ),
-                          padding:
-                          const EdgeInsets
-                              .symmetric(
-                            vertical: 15,
+                          const SizedBox(
+                              width: 8),
+                          Text(
+                            service['duration']
+                                .toString(),
+                            style:
+                            const TextStyle(
+                              fontWeight:
+                              FontWeight.w600,
+                            ),
                           ),
-                        ),
-                        child:
-                        const Text(
-                          'ADD TO CART',
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(
-                        width: 12),
-
-                    Expanded(
-                      child:
-                      ElevatedButton(
-                        onPressed:
-                        _isLoading
-                            ? null
-                            : () {
-                          Navigator.pop(
-                              context);
-                          _bookAppointment(
-                              service);
-                        },
-                        style:
-                        ElevatedButton
-                            .styleFrom(
-                          backgroundColor:
-                          primaryPurple,
-                          foregroundColor:
-                          Colors.white,
-                          padding:
-                          const EdgeInsets
-                              .symmetric(
-                            vertical: 15,
+                          const Spacer(),
+                          Text(
+                            'R${currentTotal.toStringAsFixed(2)}',
+                            style:
+                            const TextStyle(
+                              fontSize: 20,
+                              fontWeight:
+                              FontWeight.bold,
+                              color:
+                              primaryPurple,
+                            ),
                           ),
-                        ),
-                        child:
-                        const Text(
-                          'BOOK NOW',
-                        ),
+                        ],
                       ),
-                    ),
-                  ],
+
+                      // ==================================================
+                      // PRESS-ON INSTALLATION ADD-ON
+                      // ==================================================
+
+                      if (isNails) ...[
+                        const SizedBox(height: 12),
+
+                        CheckboxListTile(
+                          title: const Text(
+                            'Include Salon Installation (+R50.00)',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                          subtitle: const Text(
+                            'Have our professionals install your press-ons at the salon.',
+                          ),
+                          value: includeInstallation,
+                          activeColor: primaryPurple,
+                          contentPadding: EdgeInsets.zero,
+                          onChanged: (value) {
+                            setModalState(() {
+                              includeInstallation =
+                                  value ?? false;
+                            });
+                          },
+                        ),
+                      ],
+
+                      const SizedBox(
+                          height: 24),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child:
+                            OutlinedButton(
+                              onPressed: () {
+                                Navigator.pop(
+                                    context);
+
+                                final Map<String, dynamic>
+                                modifiedService = {
+                                  ...service,
+                                  'price': currentTotal,
+                                  'name': includeInstallation && isNails
+                                      ? '${service['name']} (+ Installation)'
+                                      : service['name'],
+                                };
+
+                                _addToCart(
+                                    modifiedService);
+                              },
+                              style:
+                              OutlinedButton
+                                  .styleFrom(
+                                foregroundColor:
+                                primaryPurple,
+                                side:
+                                const BorderSide(
+                                  color:
+                                  primaryPurple,
+                                ),
+                                padding:
+                                const EdgeInsets
+                                    .symmetric(
+                                  vertical: 15,
+                                ),
+                              ),
+                              child:
+                              const Text(
+                                'ADD TO CART',
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(
+                              width: 12),
+
+                          Expanded(
+                            child:
+                            ElevatedButton(
+                              onPressed:
+                              _isLoading
+                                  ? null
+                                  : () {
+                                Navigator.pop(
+                                    context);
+
+                                final Map<String, dynamic>
+                                modifiedService = {
+                                  ...service,
+                                  'price': currentTotal,
+                                  'name': includeInstallation && isNails
+                                      ? '${service['name']} (+ Installation)'
+                                      : service['name'],
+                                };
+
+                                _bookAppointment(
+                                    modifiedService);
+                              },
+                              style:
+                              ElevatedButton
+                                  .styleFrom(
+                                backgroundColor:
+                                primaryPurple,
+                                foregroundColor:
+                                Colors.white,
+                                padding:
+                                const EdgeInsets
+                                    .symmetric(
+                                  vertical: 15,
+                                ),
+                              ),
+                              child:
+                              const Text(
+                                'BOOK NOW',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1225,6 +1402,9 @@ class _MarketplaceScreenState
     final bool favourite =
     _favourites.contains(id);
 
+    final String? imagePath =
+    service['image'];
+
     return GestureDetector(
       onTap: () =>
           _showServiceDetails(
@@ -1267,8 +1447,18 @@ class _MarketplaceScreenState
                 BorderRadius.circular(
                   16,
                 ),
+                image: imagePath != null
+                    ? DecorationImage(
+                  image: AssetImage(
+                    imagePath,
+                  ),
+                  fit: BoxFit.cover,
+                )
+                    : null,
               ),
-              child: Icon(
+              child: imagePath != null
+                  ? null
+                  : Icon(
                 service['icon']
                 as IconData,
                 color:
@@ -1330,8 +1520,10 @@ class _MarketplaceScreenState
 
                   Row(
                     children: [
-                      const Icon(
-                        Icons.access_time,
+                      Icon(
+                        service['isProduct'] == true
+                            ? Icons.inventory_2
+                            : Icons.access_time,
                         size: 14,
                         color:
                         primaryPurple,

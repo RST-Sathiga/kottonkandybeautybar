@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:kottonkandy/loyalty.dart';
 
 import 'firebase_options.dart';
 import 'splash.dart';
+import 'login_screen.dart';
+import 'marketplace.dart';
 import 'booking_page.dart';
 import 'settings.dart';
+import 'loyalty.dart';
 
 // Global notifier to trigger theme updates dynamically across the app
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
