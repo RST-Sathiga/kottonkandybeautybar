@@ -1,32 +1,49 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'client_chat_system.dart';
+import 'user_info.dart';
+import 'orders.dart';
+import 'loyalty.dart';
+import 'support.dart';
+import 'settings.dart';
+import 'favorites_page.dart';
+import 'main.dart';
 
 import 'booking_page.dart';
-import 'client_chat_system.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
 
   @override
-  State<MarketplaceScreen> createState() => _MarketplaceScreenState();
+  State<MarketplaceScreen> createState() =>
+      _MarketplaceScreenState();
 }
 
-class _MarketplaceScreenState extends State<MarketplaceScreen> {
-  // ==========================================================
+class _MarketplaceScreenState
+    extends State<MarketplaceScreen> {
+  // ============================================================
   // FIREBASE
   // ============================================================
 
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth =
+      FirebaseAuth.instance;
+
+  final FirebaseFirestore _firestore =
+      FirebaseFirestore.instance;
 
   // ============================================================
   // COLOURS
   // ============================================================
 
-  static const Color primaryPurple = Color(0xFF6B3A82);
-  static const Color fieldPurple = Color(0xFF9156A1);
-  static const Color lightPurple = Color(0xFFF3EAF6);
+  static const Color primaryPurple =
+  Color(0xFF6B3A82);
+
+  static const Color fieldPurple =
+  Color(0xFF9156A1);
+
+  static const Color lightPurple =
+  Color(0xFFF3EAF6);
 
   // ============================================================
   // CONTROLLERS
@@ -40,6 +57,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // ============================================================
 
   int _selectedIndex = 0;
+
+  String _selectedCategory = 'All';
+
   bool _isLoading = false;
 
   // ============================================================
@@ -55,94 +75,103 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   final Set<String> _favourites = {};
 
   // ============================================================
-  // YOUR ORIGINAL PRODUCTS
+  // CATEGORIES
+  // ============================================================
+
+  final List<Map<String, dynamic>> _categories = [
+    {
+      'name': 'All',
+      'icon': Icons.apps,
+    },
+    {
+      'name': 'Hair',
+      'icon': Icons.content_cut,
+    },
+    {
+      'name': 'Nails',
+      'icon': Icons.brush,
+    },
+    {
+      'name': 'Makeup',
+      'icon': Icons.face,
+    },
+    {
+      'name': 'Lashes',
+      'icon': Icons.remove_red_eye,
+    },
+    {
+      'name': 'Skincare',
+      'icon': Icons.spa,
+    },
+  ];
+
+  // ============================================================
+  // SAMPLE SERVICES
+  //
+  // These allow the marketplace to work immediately.
+  // Firestore products can be added later.
   // ============================================================
 
   final List<Map<String, dynamic>> _sampleServices = [
-    // ------------------------------------------------------------
-    // HAIR CARE PRODUCTS
-    // ------------------------------------------------------------
-
     {
-      'id': 'aki_shampoo',
-      'name': 'Aki Asili Clarifying Shampoo',
+      'id': 'hair_braiding',
+      'name': 'Hair Braiding',
       'category': 'Hair',
       'description':
-      'Deep cleansing shampoo formulated to eliminate build-up.',
-      'price': 150.00,
-      'duration': 'Product',
-      'isProduct': true,
-      'icon': Icons.water_drop,
-      'image': 'assets/images/shampoo.jpeg',
+      'Professional braiding and protective hairstyles.',
+      'price': 350.00,
+      'duration': '2 hrs',
+      'icon': Icons.content_cut,
     },
-
     {
-      'id': 'hair_spray',
-      'name': 'Aki Asili Hair Spray',
-      'category': 'Hair',
+      'id': 'gel_nails',
+      'name': 'Gel Nails',
+      'category': 'Nails',
       'description':
-      'Lightweight hold spray to lock in styles and reduce frizz.',
-      'price': 90.00,
-      'duration': 'Product',
-      'isProduct': true,
-      'icon': Icons.air,
-      'image': 'assets/images/hair_spary.jpeg',
+      'Beautiful long-lasting gel nail application.',
+      'price': 250.00,
+      'duration': '1 hr 30 min',
+      'icon': Icons.brush,
     },
-
     {
-      'id': 'creamy_hair_food',
-      'name': 'Aki Asili Creamy Hair Food',
-      'category': 'Hair',
+      'id': 'makeup',
+      'name': 'Professional Makeup',
+      'category': 'Makeup',
       'description':
-      'Nourishing formula that seals in moisture and adds shine.',
-      'price': 120.00,
-      'duration': 'Product',
-      'isProduct': true,
+      'Professional makeup for events and special occasions.',
+      'price': 450.00,
+      'duration': '1 hr 30 min',
+      'icon': Icons.face,
+    },
+    {
+      'id': 'lashes',
+      'name': 'Lash Extensions',
+      'category': 'Lashes',
+      'description':
+      'Enhance your look with beautiful lash extensions.',
+      'price': 300.00,
+      'duration': '1 hr',
+      'icon': Icons.remove_red_eye,
+    },
+    {
+      'id': 'facial',
+      'name': 'Luxury Facial',
+      'category': 'Skincare',
+      'description':
+      'Relaxing facial treatment for healthy glowing skin.',
+      'price': 400.00,
+      'duration': '1 hr',
       'icon': Icons.spa,
-      'image': 'assets/images/creamy_hair_food.jpeg',
     },
-
     {
-      'id': 'protein_conditioner',
-      'name': 'Aki Asili Protein Conditioner',
+      'id': 'hair_wash',
+      'name': 'Hair Wash & Treatment',
       'category': 'Hair',
       'description':
-      'Restorative treatment to strengthen and repair damaged hair.',
-      'price': 180.00,
-      'duration': 'Product',
-      'isProduct': true,
-      'icon': Icons.sanitizer,
-      'image': 'assets/images/protien_conditioner.jpeg',
-    },
-
-    // ------------------------------------------------------------
-    // PRESS-ON NAILS
-    // ------------------------------------------------------------
-
-    {
-      'id': 'french_tip_nails',
-      'name': 'Classic French Tip Press-Ons',
-      'category': 'Nails',
-      'description':
-      'Elegant and timeless French tip press-on nails with adhesive.',
-      'price': 150.00,
-      'duration': 'Product',
-      'isProduct': true,
-      'icon': Icons.back_hand,
-      'image': 'assets/images/nails.jpeg',
-    },
-
-    {
-      'id': 'matte_nude_nails',
-      'name': 'Matte Nude Press-On Nails',
-      'category': 'Nails',
-      'description':
-      'Sophisticated matte nude finish for everyday wear.',
-      'price': 130.00,
-      'duration': 'Product',
-      'isProduct': true,
-      'icon': Icons.back_hand,
-      'image': 'assets/images/matte_nails.jpeg',
+      'Deep cleansing and nourishing hair treatment.',
+      'price': 220.00,
+      'duration': '1 hr',
+      'icon': Icons.water_drop,
     },
   ];
 
@@ -150,18 +179,23 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // USER
   // ============================================================
 
-  User? get _currentUser => _auth.currentUser;
+  User? get _currentUser =>
+      _auth.currentUser;
 
   String get _userName {
-    final String? displayName = _currentUser?.displayName;
+    final String? displayName =
+        _currentUser?.displayName;
 
-    if (displayName != null && displayName.trim().isNotEmpty) {
+    if (displayName != null &&
+        displayName.trim().isNotEmpty) {
       return displayName.split(' ').first;
     }
 
-    final String? email = _currentUser?.email;
+    final String? email =
+        _currentUser?.email;
 
-    if (email != null && email.contains('@')) {
+    if (email != null &&
+        email.contains('@')) {
       return email.split('@').first;
     }
 
@@ -169,7 +203,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   // ============================================================
-  // INIT / DISPOSE
+  // DISPOSE
   // ============================================================
 
   @override
@@ -179,73 +213,62 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   // ============================================================
-  // FILTER PRODUCTS
+  // FILTER SERVICES
   // ============================================================
 
-  List<Map<String, dynamic>> get _filteredServices {
+  List<Map<String, dynamic>>
+  get _filteredServices {
     final String search =
-    _searchController.text.trim().toLowerCase();
+    _searchController.text
+        .trim()
+        .toLowerCase();
 
     return _sampleServices.where((service) {
       final String name =
-      service['name'].toString().toLowerCase();
-
-      final String description =
-      service['description'].toString().toLowerCase();
+      service['name']
+          .toString()
+          .toLowerCase();
 
       final String category =
-      service['category'].toString().toLowerCase();
+      service['category']
+          .toString()
+          .toLowerCase();
 
-      return search.isEmpty ||
-          name.contains(search) ||
-          description.contains(search) ||
-          category.contains(search);
+      final bool matchesSearch =
+          search.isEmpty ||
+              name.contains(search) ||
+              category.contains(search);
+
+      final bool matchesCategory =
+          _selectedCategory == 'All' ||
+              service['category'] ==
+                  _selectedCategory;
+
+      return matchesSearch &&
+          matchesCategory;
     }).toList();
-  }
-
-  // ============================================================
-  // SHOW MESSAGE
-  // ============================================================
-
-  void _showMessage(
-      String message, {
-        bool isError = true,
-      }) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: isError
-              ? Colors.red.shade700
-              : Colors.green.shade700,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
   }
 
   // ============================================================
   // ADD TO CART
   // ============================================================
 
-  void _addToCart(Map<String, dynamic> service) {
-    final String id = service['id'].toString();
+  void _addToCart(
+      Map<String, dynamic> service,
+      ) {
+    final String id =
+    service['id'].toString();
 
-    final int existingIndex = _cart.indexWhere(
-          (item) =>
-      item['id'] == id &&
-          item['name'] == service['name'],
+    final int existingIndex =
+    _cart.indexWhere(
+          (item) => item['id'] == id,
     );
 
     if (existingIndex >= 0) {
       _cart[existingIndex]['quantity'] =
-          (_cart[existingIndex]['quantity'] as int) + 1;
+          (_cart[existingIndex]['quantity']
+          as int) +
+              1;
     } else {
       _cart.add({
         ...service,
@@ -280,7 +303,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
     for (final item in _cart) {
       final double price =
-      (item['price'] as num).toDouble();
+      (item['price'] as num)
+          .toDouble();
 
       final int quantity =
       item['quantity'] as int;
@@ -292,7 +316,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   // ============================================================
-  // CART COUNT
+  // CART ITEM COUNT
   // ============================================================
 
   int get _cartItemCount {
@@ -306,10 +330,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   // ============================================================
-  // FAVOURITES
+  // TOGGLE FAVOURITE
   // ============================================================
 
-  void _toggleFavourite(String id) {
+  void _toggleFavourite(
+      String id,
+      ) {
     setState(() {
       if (_favourites.contains(id)) {
         _favourites.remove(id);
@@ -320,16 +346,34 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   // ============================================================
-  // BOOKING PAGE
+  // SHOW MESSAGE
   // ============================================================
 
-  void _openBookingPage() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const BookingPage(),
-      ),
-    );
+  void _showMessage(
+      String message, {
+        bool isError = true,
+      }) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: isError
+              ? Colors.red.shade700
+              : Colors.green.shade700,
+          behavior:
+          SnackBarBehavior.floating,
+          margin:
+          const EdgeInsets.all(16),
+          shape:
+          RoundedRectangleBorder(
+            borderRadius:
+            BorderRadius.circular(12),
+          ),
+        ),
+      );
   }
 
   // ============================================================
@@ -342,31 +386,45 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Logout'),
+          title:
+          const Text('Logout'),
           content: const Text(
             'Are you sure you want to log out?',
           ),
           actions: [
             TextButton(
               onPressed: () =>
-                  Navigator.pop(context, false),
-              child: const Text('CANCEL'),
+                  Navigator.pop(
+                    context,
+                    false,
+                  ),
+              child:
+              const Text('CANCEL'),
             ),
             ElevatedButton(
               onPressed: () =>
-                  Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryPurple,
-                foregroundColor: Colors.white,
+                  Navigator.pop(
+                    context,
+                    true,
+                  ),
+              style:
+              ElevatedButton.styleFrom(
+                backgroundColor:
+                primaryPurple,
+                foregroundColor:
+                Colors.white,
               ),
-              child: const Text('LOGOUT'),
+              child:
+              const Text('LOGOUT'),
             ),
           ],
         );
       },
     );
 
-    if (confirmed != true) return;
+    if (confirmed != true) {
+      return;
+    }
 
     await _auth.signOut();
 
@@ -380,323 +438,329 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   // ============================================================
-  // PRODUCT DETAILS
+  // BOOK APPOINTMENT
+  // ============================================================
+
+  Future<void> _bookAppointment(
+      Map<String, dynamic> service,
+      ) async {
+    final DateTime? date =
+    await showDatePicker(
+      context: context,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(
+        const Duration(days: 90),
+      ),
+      initialDate: DateTime.now(),
+      builder:
+          (context, child) {
+        return Theme(
+          data: Theme.of(context)
+              .copyWith(
+            colorScheme:
+            const ColorScheme.light(
+              primary:
+              primaryPurple,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (date == null) {
+      return;
+    }
+
+    if (!mounted) return;
+
+    final TimeOfDay? time =
+    await showTimePicker(
+      context: context,
+      initialTime:
+      const TimeOfDay(
+        hour: 10,
+        minute: 0,
+      ),
+    );
+
+    if (time == null) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final User? user =
+          _currentUser;
+
+      if (user == null) {
+        _showMessage(
+          'Please log in to book an appointment.',
+        );
+        return;
+      }
+
+      // ========================================================
+      // SAVE APPOINTMENT TO FIRESTORE
+      // ========================================================
+
+      await _firestore
+          .collection('appointments')
+          .add({
+        'userId': user.uid,
+        'userEmail':
+        user.email ?? '',
+        'serviceId':
+        service['id'],
+        'serviceName':
+        service['name'],
+        'category':
+        service['category'],
+        'price':
+        service['price'],
+        'date': Timestamp.fromDate(
+          DateTime(
+            date.year,
+            date.month,
+            date.day,
+            time.hour,
+            time.minute,
+          ),
+        ),
+        'status': 'pending',
+        'createdAt':
+        FieldValue.serverTimestamp(),
+      });
+
+      _showMessage(
+        'Appointment request submitted successfully.',
+        isError: false,
+      );
+    } catch (e) {
+      _showMessage(
+        'Could not save appointment. Please try again.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // ============================================================
+  // SERVICE DETAILS
   // ============================================================
 
   void _showServiceDetails(
       Map<String, dynamic> service,
       ) {
-    final bool isNails =
-        service['category'] == 'Nails';
-
-    final String? imagePath =
-    service['image'];
-
-    bool includeInstallation = false;
-
-    final double basePrice =
-    (service['price'] as num).toDouble();
-
-    const double installationFee = 50.00;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (
-              context,
-              setModalState,
-              ) {
-            final double currentTotal =
-                basePrice +
-                    (includeInstallation && isNails
-                        ? installationFee
-                        : 0);
-
-            return Container(
-              padding:
-              const EdgeInsets.all(24),
-              decoration:
-              const BoxDecoration(
-                color: Colors.white,
-                borderRadius:
-                BorderRadius.vertical(
-                  top: Radius.circular(28),
-                ),
-              ),
-              child: SafeArea(
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize:
-                    MainAxisSize.min,
-                    crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 45,
-                          height: 5,
-                          decoration:
-                          BoxDecoration(
-                            color: Colors.grey[300],
-                            borderRadius:
-                            BorderRadius.circular(
-                              10,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 25),
-
-                      // PRODUCT IMAGE
-                      Container(
-                        height: 180,
-                        width: double.infinity,
-                        decoration:
-                        BoxDecoration(
-                          color: lightPurple,
-                          borderRadius:
-                          BorderRadius.circular(
-                            20,
-                          ),
-                          image: imagePath != null
-                              ? DecorationImage(
-                            image: AssetImage(
-                              imagePath,
-                            ),
-                            fit: BoxFit.cover,
-                          )
-                              : null,
-                        ),
-                        child: imagePath != null
-                            ? null
-                            : Icon(
-                          service['icon']
-                          as IconData,
-                          size: 65,
-                          color:
-                          primaryPurple,
-                        ),
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      Text(
-                        service['name']
-                            .toString(),
-                        style:
-                        const TextStyle(
-                          fontSize: 24,
-                          fontWeight:
-                          FontWeight.bold,
-                        ),
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      Text(
-                        service['description']
-                            .toString(),
-                        style: TextStyle(
-                          fontSize: 15,
-                          color:
-                          Colors.grey[700],
-                        ),
-                      ),
-
-                      const SizedBox(height: 18),
-
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.category_outlined,
-                            color:
-                            primaryPurple,
-                          ),
-                          const SizedBox(
-                            width: 8,
-                          ),
-                          Text(
-                            service['category']
-                                .toString(),
-                            style:
-                            const TextStyle(
-                              fontWeight:
-                              FontWeight.w600,
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            'R${currentTotal.toStringAsFixed(2)}',
-                            style:
-                            const TextStyle(
-                              fontSize: 20,
-                              fontWeight:
-                              FontWeight.bold,
-                              color:
-                              primaryPurple,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 10),
-
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.inventory_2,
-                            color:
-                            primaryPurple,
-                          ),
-                          const SizedBox(
-                            width: 8,
-                          ),
-                          Text(
-                            service['duration']
-                                .toString(),
-                          ),
-                        ],
-                      ),
-
-                      // PRESS-ON INSTALLATION
-                      if (isNails) ...[
-                        const SizedBox(height: 15),
-
-                        CheckboxListTile(
-                          title: const Text(
-                            'Include Salon Installation (+R50.00)',
-                            style:
-                            TextStyle(
-                              fontWeight:
-                              FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                          subtitle:
-                          const Text(
-                            'Have our professionals install your press-ons at the salon.',
-                          ),
-                          value:
-                          includeInstallation,
-                          activeColor:
-                          primaryPurple,
-                          contentPadding:
-                          EdgeInsets.zero,
-                          onChanged: (value) {
-                            setModalState(() {
-                              includeInstallation =
-                                  value ?? false;
-                            });
-                          },
-                        ),
-                      ],
-
-                      const SizedBox(height: 20),
-
-                      // ADD TO CART
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.pop(
-                              context,
-                            );
-
-                            final Map<
-                                String,
-                                dynamic>
-                            modifiedService = {
-                              ...service,
-                              'price':
-                              currentTotal,
-                              'name':
-                              includeInstallation &&
-                                  isNails
-                                  ? '${service['name']} (+ Installation)'
-                                  : service['name'],
-                            };
-
-                            _addToCart(
-                              modifiedService,
-                            );
-                          },
-                          icon: const Icon(
-                            Icons.shopping_bag_outlined,
-                          ),
-                          label: const Text(
-                            'ADD TO CART',
-                            style:
-                            TextStyle(
-                              fontWeight:
-                              FontWeight.bold,
-                            ),
-                          ),
-                          style:
-                          ElevatedButton
-                              .styleFrom(
-                            backgroundColor:
-                            primaryPurple,
-                            foregroundColor:
-                            Colors.white,
-                            shape:
-                            RoundedRectangleBorder(
-                              borderRadius:
-                              BorderRadius
-                                  .circular(
-                                16,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 10),
-
-                      // FAVOURITE
-                      SizedBox(
-                        width: double.infinity,
-                        child:
-                        TextButton.icon(
-                          onPressed: () {
-                            _toggleFavourite(
-                              service['id']
-                                  .toString(),
-                            );
-
-                            Navigator.pop(
-                              context,
-                            );
-                          },
-                          icon: Icon(
-                            _favourites.contains(
-                              service['id']
-                                  .toString(),
-                            )
-                                ? Icons.favorite
-                                : Icons.favorite_border,
-                            color: Colors.red,
-                          ),
-                          label: Text(
-                            _favourites.contains(
-                              service['id']
-                                  .toString(),
-                            )
-                                ? 'Remove from favourites'
-                                : 'Add to favourites',
-                          ),
-                        ),
-                      ),
-                    ],
+        return Container(
+          padding:
+          const EdgeInsets.all(24),
+          decoration:
+          const BoxDecoration(
+            color: Colors.white,
+            borderRadius:
+            BorderRadius.vertical(
+              top: Radius.circular(28),
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize:
+              MainAxisSize.min,
+              crossAxisAlignment:
+              CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 45,
+                    height: 5,
+                    decoration:
+                    BoxDecoration(
+                      color:
+                      Colors.grey[300],
+                      borderRadius:
+                      BorderRadius
+                          .circular(10),
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+
+                const SizedBox(
+                    height: 25),
+
+                Container(
+                  height: 100,
+                  width:
+                  double.infinity,
+                  decoration:
+                  BoxDecoration(
+                    color: lightPurple,
+                    borderRadius:
+                    BorderRadius
+                        .circular(20),
+                  ),
+                  child: Icon(
+                    service['icon']
+                    as IconData,
+                    size: 55,
+                    color:
+                    primaryPurple,
+                  ),
+                ),
+
+                const SizedBox(
+                    height: 20),
+
+                Text(
+                  service['name']
+                      .toString(),
+                  style:
+                  const TextStyle(
+                    fontSize: 24,
+                    fontWeight:
+                    FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+
+                const SizedBox(
+                    height: 8),
+
+                Text(
+                  service['description']
+                      .toString(),
+                  style:
+                  TextStyle(
+                    fontSize: 15,
+                    color:
+                    Colors.grey[700],
+                  ),
+                ),
+
+                const SizedBox(
+                    height: 18),
+
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.access_time,
+                      color:
+                      primaryPurple,
+                    ),
+                    const SizedBox(
+                        width: 8),
+                    Text(
+                      service['duration']
+                          .toString(),
+                      style:
+                      const TextStyle(
+                        fontWeight:
+                        FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      'R${(service['price'] as num).toStringAsFixed(2)}',
+                      style:
+                      const TextStyle(
+                        fontSize: 20,
+                        fontWeight:
+                        FontWeight.bold,
+                        color:
+                        primaryPurple,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(
+                    height: 24),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child:
+                      OutlinedButton(
+                        onPressed: () {
+                          Navigator.pop(
+                              context);
+                          _addToCart(
+                              service);
+                        },
+                        style:
+                        OutlinedButton
+                            .styleFrom(
+                          foregroundColor:
+                          primaryPurple,
+                          side:
+                          const BorderSide(
+                            color:
+                            primaryPurple,
+                          ),
+                          padding:
+                          const EdgeInsets
+                              .symmetric(
+                            vertical: 15,
+                          ),
+                        ),
+                        child:
+                        const Text(
+                          'ADD TO CART',
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(
+                        width: 12),
+
+                    Expanded(
+                      child:
+                      ElevatedButton(
+                        onPressed:
+                        _isLoading
+                            ? null
+                            : () {
+                          Navigator.pop(
+                              context);
+                          _bookAppointment(
+                              service);
+                        },
+                        style:
+                        ElevatedButton
+                            .styleFrom(
+                          backgroundColor:
+                          primaryPurple,
+                          foregroundColor:
+                          Colors.white,
+                          padding:
+                          const EdgeInsets
+                              .symmetric(
+                            vertical: 15,
+                          ),
+                        ),
+                        child:
+                        const Text(
+                          'BOOK NOW',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         );
       },
     );
@@ -711,25 +775,27 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       color: primaryPurple,
       onRefresh: () async {
         await Future.delayed(
-          const Duration(milliseconds: 400),
+          const Duration(
+            milliseconds: 500,
+          ),
         );
 
-        if (mounted) {
-          setState(() {});
-        }
+        setState(() {});
       },
       child: CustomScrollView(
         physics:
         const AlwaysScrollableScrollPhysics(),
         slivers: [
+
           // ======================================================
-          // APP BAR
+          // TOP APP BAR
           // ======================================================
 
           SliverAppBar(
             pinned: true,
             floating: true,
-            backgroundColor: Colors.white,
+            backgroundColor:
+            Colors.white,
             elevation: 0,
             titleSpacing: 20,
             title: Column(
@@ -738,7 +804,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               children: [
                 Text(
                   'Welcome, $_userName!',
-                  style: const TextStyle(
+                  style:
+                  const TextStyle(
                     color: Colors.black,
                     fontSize: 20,
                     fontWeight:
@@ -746,29 +813,29 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   ),
                 ),
                 Text(
-                  'Find authentic Aki Asili products & press-on nails',
-                  style: TextStyle(
-                    color: Colors.grey[600],
+                  'Find your next beauty experience',
+                  style:
+                  TextStyle(
+                    color:
+                    Colors.grey[600],
                     fontSize: 12,
                   ),
                 ),
               ],
             ),
             actions: [
-              IconButton(
-                onPressed: () {
+              _buildIconButton(
+                icon: Icons.notifications_none,
+                onTap: () {
                   _showMessage(
                     'No new notifications.',
                     isError: false,
                   );
                 },
-                icon: const Icon(
-                  Icons.notifications_none,
-                  color: Colors.black87,
-                ),
               ),
               _buildCartButton(),
-              const SizedBox(width: 10),
+              const SizedBox(
+                  width: 10),
             ],
           ),
 
@@ -788,14 +855,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               delegate:
               SliverChildListDelegate(
                 [
+
+                  // =================================================
                   // SEARCH
+                  // =================================================
+
                   Container(
                     decoration:
                     BoxDecoration(
                       color:
                       Colors.grey[100],
                       borderRadius:
-                      BorderRadius.circular(
+                      BorderRadius
+                          .circular(
                         18,
                       ),
                     ),
@@ -808,7 +880,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       decoration:
                       InputDecoration(
                         hintText:
-                        'Search products...',
+                        'Search services...',
                         prefixIcon:
                         const Icon(
                           Icons.search,
@@ -828,10 +900,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                               () {
                             _searchController
                                 .clear();
-
                             setState(
-                                  () {},
-                            );
+                                    () {});
                           },
                         )
                             : null,
@@ -846,29 +916,33 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 25),
+                  const SizedBox(
+                      height: 25),
 
                   // =================================================
-                  // BANNER
+                  // WELCOME BANNER
                   // =================================================
 
                   Container(
-                    width: double.infinity,
+                    width:
+                    double.infinity,
                     padding:
-                    const EdgeInsets.all(
-                      22,
-                    ),
+                    const EdgeInsets
+                        .all(22),
                     decoration:
                     BoxDecoration(
                       gradient:
                       const LinearGradient(
                         colors: [
-                          Color(0xFF6B3A82),
-                          Color(0xFF9156A1),
+                          Color(
+                              0xFF6B3A82),
+                          Color(
+                              0xFF9156A1),
                         ],
                       ),
                       borderRadius:
-                      BorderRadius.circular(
+                      BorderRadius
+                          .circular(
                         24,
                       ),
                     ),
@@ -881,49 +955,42 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                 .start,
                             children: [
                               const Text(
-                                'BEAUTY & GLORY,\nALL IN ONE.',
+                                'YOUR BEAUTY,\nYOUR WAY.',
                                 style:
                                 TextStyle(
                                   color:
                                   Colors.white,
-                                  fontSize: 22,
+                                  fontSize:
+                                  22,
                                   fontWeight:
                                   FontWeight
                                       .bold,
                                 ),
                               ),
-
                               const SizedBox(
-                                height: 8,
-                              ),
-
+                                  height: 8),
                               const Text(
-                                'Shop professional hair care and press-on nails.',
+                                'Book your next appointment with Kotton Kandy.',
                                 style:
                                 TextStyle(
                                   color:
                                   Colors.white70,
-                                  fontSize: 13,
+                                  fontSize:
+                                  13,
                                 ),
                               ),
-
                               const SizedBox(
-                                height: 15,
-                              ),
-
-                              // =================================================
-                              // CHANGED ONLY:
-                              // SHOP NOW -> BOOK NOW
-                              // =================================================
-
-                              ElevatedButton.icon(
+                                  height: 15),
+                              ElevatedButton(
                                 onPressed:
-                                _openBookingPage,
-                                icon:
-                                const Icon(
-                                  Icons
-                                      .calendar_month,
-                                ),
+                                    () {
+                                  setState(
+                                        () {
+                                      _selectedIndex =
+                                      1;
+                                    },
+                                  );
+                                },
                                 style:
                                 ElevatedButton
                                     .styleFrom(
@@ -934,31 +1001,21 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                   shape:
                                   RoundedRectangleBorder(
                                     borderRadius:
-                                    BorderRadius
-                                        .circular(
+                                    BorderRadius.circular(
                                       15,
                                     ),
                                   ),
                                 ),
-                                label:
+                                child:
                                 const Text(
                                   'BOOK NOW',
-                                  style:
-                                  TextStyle(
-                                    fontWeight:
-                                    FontWeight
-                                        .bold,
-                                  ),
                                 ),
                               ),
                             ],
                           ),
                         ),
-
                         const SizedBox(
-                          width: 10,
-                        ),
-
+                            width: 10),
                         const Icon(
                           Icons.spa,
                           color:
@@ -969,34 +1026,144 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 28),
+                  const SizedBox(
+                      height: 28),
 
                   // =================================================
-                  // PRODUCTS
+                  // CATEGORIES
                   // =================================================
 
                   _buildSectionTitle(
-                    'Products',
+                    'Categories',
+                    onTap: () {
+                      setState(() {
+                        _selectedCategory =
+                        'All';
+                      });
+                    },
                   ),
 
-                  const SizedBox(height: 14),
+                  const SizedBox(
+                      height: 14),
+
+                  SizedBox(
+                    height: 95,
+                    child:
+                    ListView.separated(
+                      scrollDirection:
+                      Axis.horizontal,
+                      itemCount:
+                      _categories
+                          .length,
+                      separatorBuilder:
+                          (context, index) =>
+                      const SizedBox(
+                        width: 12,
+                      ),
+                      itemBuilder:
+                          (context, index) {
+                        final category =
+                        _categories[
+                        index];
+
+                        final bool selected =
+                            _selectedCategory ==
+                                category[
+                                'name'];
+
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedCategory =
+                              category[
+                              'name'];
+                            });
+                          },
+                          child: Container(
+                            width: 72,
+                            decoration:
+                            BoxDecoration(
+                              color: selected
+                                  ? primaryPurple
+                                  : lightPurple,
+                              borderRadius:
+                              BorderRadius
+                                  .circular(
+                                18,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment:
+                              MainAxisAlignment
+                                  .center,
+                              children: [
+                                Icon(
+                                  category[
+                                  'icon'],
+                                  color: selected
+                                      ? Colors.white
+                                      : primaryPurple,
+                                  size: 28,
+                                ),
+                                const SizedBox(
+                                    height: 7),
+                                Text(
+                                  category[
+                                  'name'],
+                                  style:
+                                  TextStyle(
+                                    color: selected
+                                        ? Colors.white
+                                        : Colors.black87,
+                                    fontSize:
+                                    11,
+                                    fontWeight:
+                                    FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(
+                      height: 28),
+
+                  // =================================================
+                  // SERVICES
+                  // =================================================
+
+                  _buildSectionTitle(
+                    _selectedCategory ==
+                        'All'
+                        ? 'Popular Services'
+                        : _selectedCategory,
+                  ),
+
+                  const SizedBox(
+                      height: 14),
 
                   if (_filteredServices
                       .isEmpty)
                     _buildEmptyState()
                   else
-                    ..._filteredServices.map(
-                          (service) => Padding(
-                        padding:
-                        const EdgeInsets
-                            .only(
-                          bottom: 14,
-                        ),
-                        child:
-                        _buildServiceCard(
-                          service,
-                        ),
-                      ),
+                    ..._filteredServices
+                        .map(
+                          (service) =>
+                          Padding(
+                            padding:
+                            const EdgeInsets
+                                .only(
+                              bottom: 14,
+                            ),
+                            child:
+                            _buildServiceCard(
+                              service,
+                            ),
+                          ),
                     ),
                 ],
               ),
@@ -1019,7 +1186,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       children: [
         Text(
           title,
-          style: const TextStyle(
+          style:
+          const TextStyle(
             fontSize: 20,
             fontWeight:
             FontWeight.bold,
@@ -1030,10 +1198,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         if (onTap != null)
           TextButton(
             onPressed: onTap,
-            child: const Text(
+            child:
+            const Text(
               'View All',
-              style: TextStyle(
-                color: primaryPurple,
+              style:
+              TextStyle(
+                color:
+                primaryPurple,
               ),
             ),
           ),
@@ -1042,7 +1213,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   // ============================================================
-  // PRODUCT CARD
+  // SERVICE CARD
   // ============================================================
 
   Widget _buildServiceCard(
@@ -1054,12 +1225,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final bool favourite =
     _favourites.contains(id);
 
-    final String? imagePath =
-    service['image'];
-
     return GestureDetector(
       onTap: () =>
-          _showServiceDetails(service),
+          _showServiceDetails(
+            service,
+          ),
       child: Container(
         padding:
         const EdgeInsets.all(14),
@@ -1067,13 +1237,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         BoxDecoration(
           color: Colors.white,
           borderRadius:
-          BorderRadius.circular(
-            20,
-          ),
+          BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color:
-              Colors.black.withValues(
+              color: Colors.black
+                  .withValues(
                 alpha: 0.07,
               ),
               blurRadius: 10,
@@ -1084,7 +1252,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         ),
         child: Row(
           children: [
-            // IMAGE
+
+            // ======================================================
+            // IMAGE / ICON
+            // ======================================================
+
             Container(
               width: 82,
               height: 82,
@@ -1095,18 +1267,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 BorderRadius.circular(
                   16,
                 ),
-                image: imagePath != null
-                    ? DecorationImage(
-                  image: AssetImage(
-                    imagePath,
-                  ),
-                  fit: BoxFit.cover,
-                )
-                    : null,
               ),
-              child: imagePath != null
-                  ? null
-                  : Icon(
+              child: Icon(
                 service['icon']
                 as IconData,
                 color:
@@ -1115,9 +1277,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               ),
             ),
 
-            const SizedBox(width: 14),
+            const SizedBox(
+                width: 14),
 
+            // ======================================================
             // DETAILS
+            // ======================================================
+
             Expanded(
               child: Column(
                 crossAxisAlignment:
@@ -1142,18 +1308,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   ),
 
                   const SizedBox(
-                    height: 5,
-                  ),
+                      height: 5),
 
                   Text(
-                    service[
-                    'description']
+                    service['description']
                         .toString(),
                     maxLines: 2,
                     overflow:
                     TextOverflow
                         .ellipsis,
-                    style: TextStyle(
+                    style:
+                    TextStyle(
                       fontSize: 12,
                       color:
                       Colors.grey[600],
@@ -1161,35 +1326,30 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   ),
 
                   const SizedBox(
-                    height: 8,
-                  ),
+                      height: 8),
 
                   Row(
                     children: [
                       const Icon(
-                        Icons.inventory_2,
+                        Icons.access_time,
                         size: 14,
                         color:
                         primaryPurple,
                       ),
-
                       const SizedBox(
-                        width: 4,
-                      ),
-
+                          width: 4),
                       Text(
                         service[
                         'duration']
                             .toString(),
-                        style: TextStyle(
+                        style:
+                        TextStyle(
                           fontSize: 11,
-                          color: Colors
-                              .grey[700],
+                          color:
+                          Colors.grey[700],
                         ),
                       ),
-
                       const Spacer(),
-
                       Text(
                         'R${(service['price'] as num).toStringAsFixed(2)}',
                         style:
@@ -1207,25 +1367,56 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               ),
             ),
 
-            const SizedBox(width: 8),
+            const SizedBox(
+                width: 8),
 
-            // FAVOURITE + ADD
+            // ======================================================
+            // FAVOURITE
+            // ======================================================
+
             Column(
               children: [
                 IconButton(
-                  onPressed: () =>
-                      _toggleFavourite(
-                        id,
-                      ),
                   icon: Icon(
-                    favourite
+                    _favourites.contains(service['id'])
                         ? Icons.favorite
-                        : Icons
-                        .favorite_border,
-                    color: favourite
+                        : Icons.favorite_border,
+                    color: _favourites.contains(service['id'])
                         ? Colors.red
                         : Colors.grey,
                   ),
+                  onPressed: () async {
+                    final user = FirebaseAuth.instance.currentUser;
+                    if (user == null) return;
+
+                    final serviceId = service['id'] ?? service['title'];
+                    final favRef = FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(user.uid)
+                        .collection('favorites')
+                        .doc(serviceId);
+
+                    setState(() {
+                      if (_favourites.contains(serviceId)) {
+                        _favourites.remove(serviceId);
+                      } else {
+                        _favourites.add(serviceId);
+                      }
+                    });
+
+                    if (_favourites.contains(serviceId)) {
+                      // Save to Firestore
+                      await favRef.set({
+                        'name': service['title'] ?? service['name'],
+                        'price': service['price'],
+                        'description': service['description'] ?? '',
+                        'addedAt': FieldValue.serverTimestamp(),
+                      });
+                    } else {
+                      // Remove from Firestore
+                      await favRef.delete();
+                    }
+                  },
                 ),
 
                 Container(
@@ -1239,9 +1430,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       10,
                     ),
                   ),
-                  child: IconButton(
+                  child:
+                  IconButton(
                     onPressed: () =>
-                        _showServiceDetails(
+                        _addToCart(
                           service,
                         ),
                     icon:
@@ -1258,6 +1450,27 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         ),
       ),
     );
+  }
+  @override
+  void initState() {
+    super.initState();
+    _loadUserFavorites();
+  }
+
+  Future<void> _loadUserFavorites() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('favorites')
+          .get();
+
+      setState(() {
+        _favourites.clear();
+        _favourites.addAll(snapshot.docs.map((doc) => doc.id));
+      });
+    }
   }
 
   // ============================================================
@@ -1285,13 +1498,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             primaryPurple,
             size: 50,
           ),
-
           const SizedBox(
-            height: 12,
-          ),
-
+              height: 12),
           const Text(
-            'No products found',
+            'No services found',
             style:
             TextStyle(
               fontSize: 18,
@@ -1299,16 +1509,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               FontWeight.bold,
             ),
           ),
-
           const SizedBox(
-            height: 6,
-          ),
-
+              height: 6),
           Text(
-            'Try another search term.',
+            'Try another search or category.',
             textAlign:
             TextAlign.center,
-            style: TextStyle(
+            style:
+            TextStyle(
               color:
               Colors.grey[700],
             ),
@@ -1328,13 +1536,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       Alignment.center,
       children: [
         IconButton(
-          onPressed:
-          _openCart,
+          onPressed: () {
+            _openCart();
+          },
           icon: const Icon(
-            Icons
-                .shopping_bag_outlined,
-            color:
-            Colors.black87,
+            Icons.shopping_bag_outlined,
+            color: Colors.black87,
           ),
         ),
 
@@ -1344,21 +1551,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             top: 5,
             child: Container(
               padding:
-              const EdgeInsets
-                  .all(4),
+              const EdgeInsets.all(4),
               decoration:
               const BoxDecoration(
                 color: Colors.red,
-                shape:
-                BoxShape.circle,
+                shape: BoxShape.circle,
               ),
               child: Text(
                 _cartItemCount
                     .toString(),
                 style:
                 const TextStyle(
-                  color:
-                  Colors.white,
+                  color: Colors.white,
                   fontSize: 9,
                   fontWeight:
                   FontWeight.bold,
@@ -1371,7 +1575,24 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   // ============================================================
-  // CART
+  // ICON BUTTON
+  // ============================================================
+
+  Widget _buildIconButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return IconButton(
+      onPressed: onTap,
+      icon: Icon(
+        icon,
+        color: Colors.black87,
+      ),
+    );
+  }
+
+  // ============================================================
+  // CART SCREEN
   // ============================================================
 
   void _openCart() {
@@ -1382,10 +1603,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       Colors.transparent,
       builder: (context) {
         return StatefulBuilder(
-          builder: (
-              context,
-              setModalState,
-              ) {
+          builder:
+              (context, setModalState) {
             return Container(
               height:
               MediaQuery.of(context)
@@ -1408,6 +1627,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               ),
               child: Column(
                 children: [
+
                   Container(
                     width: 45,
                     height: 5,
@@ -1424,8 +1644,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   ),
 
                   const SizedBox(
-                    height: 20,
-                  ),
+                      height: 20),
 
                   Row(
                     children: [
@@ -1439,27 +1658,24 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                               .bold,
                         ),
                       ),
-
                       const Spacer(),
-
                       Text(
                         '$_cartItemCount items',
                         style:
                         TextStyle(
                           color:
-                          Colors.grey[
-                          600],
+                          Colors.grey[600],
                         ),
                       ),
                     ],
                   ),
 
                   const SizedBox(
-                    height: 20,
-                  ),
+                      height: 20),
 
                   Expanded(
-                    child: _cart.isEmpty
+                    child:
+                    _cart.isEmpty
                         ? _buildEmptyCart()
                         : ListView
                         .separated(
@@ -1480,40 +1696,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         _cart[
                         index];
 
-                        final String?
-                        imagePath =
-                        item[
-                        'image'];
-
                         return ListTile(
                           leading:
-                          Container(
-                            width: 50,
-                            height: 50,
-                            decoration:
-                            BoxDecoration(
-                              color:
-                              lightPurple,
-                              borderRadius:
-                              BorderRadius.circular(
-                                10,
-                              ),
-                              image: imagePath !=
-                                  null
-                                  ? DecorationImage(
-                                image:
-                                AssetImage(
-                                  imagePath,
-                                ),
-                                fit: BoxFit
-                                    .cover,
-                              )
-                                  : null,
-                            ),
-                            child: imagePath !=
-                                null
-                                ? null
-                                : Icon(
+                          CircleAvatar(
+                            backgroundColor:
+                            lightPurple,
+                            child:
+                            Icon(
                               item[
                               'icon'],
                               color:
@@ -1527,8 +1716,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                             style:
                             const TextStyle(
                               fontWeight:
-                              FontWeight
-                                  .bold,
+                              FontWeight.bold,
                             ),
                           ),
                           subtitle:
@@ -1547,11 +1735,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                             onPressed:
                                 () {
                               _removeFromCart(
-                                index,
-                              );
+                                  index);
                               setModalState(
-                                    () {},
-                              );
+                                      () {});
                             },
                           ),
                         );
@@ -1570,20 +1756,20 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                               'Total',
                               style:
                               TextStyle(
-                                fontSize: 18,
+                                fontSize:
+                                18,
                                 fontWeight:
                                 FontWeight
                                     .bold,
                               ),
                             ),
-
                             const Spacer(),
-
                             Text(
                               'R${_cartTotal.toStringAsFixed(2)}',
                               style:
                               const TextStyle(
-                                fontSize: 20,
+                                fontSize:
+                                20,
                                 color:
                                 primaryPurple,
                                 fontWeight:
@@ -1595,8 +1781,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         ),
 
                         const SizedBox(
-                          height: 15,
-                        ),
+                            height: 15),
 
                         SizedBox(
                           width:
@@ -1607,9 +1792,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                             onPressed:
                                 () {
                               Navigator.pop(
-                                context,
-                              );
-
+                                  context);
                               _checkout();
                             },
                             style:
@@ -1648,17 +1831,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         MainAxisAlignment.center,
         children: [
           Icon(
-            Icons
-                .shopping_bag_outlined,
+            Icons.shopping_bag_outlined,
             size: 70,
-            color:
-            Colors.grey[400],
+            color: Colors.grey[400],
           ),
-
           const SizedBox(
-            height: 15,
-          ),
-
+              height: 15),
           const Text(
             'Your cart is empty',
             style:
@@ -1668,14 +1846,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               FontWeight.bold,
             ),
           ),
-
           const SizedBox(
-            height: 8,
-          ),
-
+              height: 8),
           Text(
-            'Add an item to get started.',
-            style: TextStyle(
+            'Add a beauty service to get started.',
+            style:
+            TextStyle(
               color:
               Colors.grey[600],
             ),
@@ -1685,8 +1861,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     );
   }
 
-  // ============================================================
-  // CHECKOUT
+  // ==========================================================
+  //CHECKOUT
   // ============================================================
 
   Future<void> _checkout() async {
@@ -1738,7 +1914,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       },
     );
 
-    if (confirmed != true) return;
+    if (confirmed != true) {
+      return;
+    }
 
     _showMessage(
       'Checkout system ready. Payment integration can be connected here.',
@@ -1747,7 +1925,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   // ============================================================
-  // BOOKINGS
+  // BOOKINGS PAGE
   // ============================================================
 
   Widget _buildBookings() {
@@ -1755,11 +1933,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         _currentUser;
 
     if (user == null) {
-      return const Scaffold(
-        body: Center(
-          child: Text(
-            'Please log in to view your bookings.',
-          ),
+      return const Center(
+        child: Text(
+          'Please log in.',
         ),
       );
     }
@@ -1768,7 +1944,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       backgroundColor:
       const Color(0xFFF9F7FA),
       appBar: AppBar(
-        title: const Text(
+        title:
+        const Text(
           'My Appointments',
           style:
           TextStyle(
@@ -1781,9 +1958,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         Colors.white,
         elevation: 0,
       ),
-      body: StreamBuilder<QuerySnapshot>(
+      body: StreamBuilder<
+          QuerySnapshot>(
         stream: _firestore
-            .collection('appointments')
+            .collection(
+            'appointments')
             .where(
           'userId',
           isEqualTo: user.uid,
@@ -1791,10 +1970,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             .snapshots(),
         builder:
             (context, snapshot) {
-          if (snapshot
-              .connectionState ==
-              ConnectionState
-                  .waiting) {
+
+          if (snapshot.connectionState ==
+              ConnectionState.waiting) {
             return const Center(
               child:
               CircularProgressIndicator(
@@ -1808,8 +1986,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             return Center(
               child: Padding(
                 padding:
-                const EdgeInsets
-                    .all(25),
+                const EdgeInsets.all(
+                  25,
+                ),
                 child: Text(
                   'Unable to load appointments.\n\n${snapshot.error}',
                   textAlign:
@@ -1829,182 +2008,140 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
           return ListView.builder(
             padding:
-            const EdgeInsets.all(
-              20,
-            ),
+            const EdgeInsets.all(20),
             itemCount:
             documents.length,
             itemBuilder:
                 (context, index) {
+
               final data =
-              documents[index]
-                  .data()
+              documents[index].data()
               as Map<String,
                   dynamic>;
 
-              return _buildBookingCard(
-                data,
+              final Timestamp?
+              timestamp =
+              data['date']
+              as Timestamp?;
+
+              final DateTime?
+              appointmentDate =
+              timestamp?.toDate();
+
+              return Container(
+                margin:
+                const EdgeInsets.only(
+                  bottom: 14,
+                ),
+                padding:
+                const EdgeInsets.all(
+                  18,
+                ),
+                decoration:
+                BoxDecoration(
+                  color:
+                  Colors.white,
+                  borderRadius:
+                  BorderRadius
+                      .circular(
+                    18,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black
+                          .withValues(
+                        alpha: 0.06,
+                      ),
+                      blurRadius: 8,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment:
+                  CrossAxisAlignment
+                      .start,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor:
+                          lightPurple,
+                          child:
+                          const Icon(
+                            Icons.spa,
+                            color:
+                            primaryPurple,
+                          ),
+                        ),
+                        const SizedBox(
+                            width: 12),
+                        Expanded(
+                          child: Text(
+                            data['serviceName']
+                                ?.toString() ??
+                                'Beauty Service',
+                            style:
+                            const TextStyle(
+                              fontSize: 17,
+                              fontWeight:
+                              FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        _statusBadge(
+                          data['status']
+                              ?.toString() ??
+                              'pending',
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(
+                        height: 15),
+
+                    if (appointmentDate !=
+                        null)
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons
+                                .calendar_today,
+                            size: 18,
+                            color:
+                            primaryPurple,
+                          ),
+                          const SizedBox(
+                              width: 8),
+                          Text(
+                            _formatDate(
+                              appointmentDate,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                    const SizedBox(
+                        height: 8),
+
+                    if (data['price'] !=
+                        null)
+                      Text(
+                        'R${(data['price'] as num).toStringAsFixed(2)}',
+                        style:
+                        const TextStyle(
+                          color:
+                          primaryPurple,
+                          fontWeight:
+                          FontWeight
+                              .bold,
+                        ),
+                      ),
+                  ],
+                ),
               );
             },
           );
         },
-      ),
-    );
-  }
-
-  // ============================================================
-  // BOOKING CARD
-  // ============================================================
-
-  Widget _buildBookingCard(
-      Map<String, dynamic> data,
-      ) {
-    final String serviceName =
-        data['serviceName']
-            ?.toString() ??
-            'Beauty Service';
-
-    final String date =
-        data['date']?.toString() ??
-            'Date not available';
-
-    final String time =
-        data['timeSlot']
-            ?.toString() ??
-            'Time not available';
-
-    final String status =
-        data['status']?.toString() ??
-            'Pending';
-
-    final num? price =
-    data['price'] as num?;
-
-    return Container(
-      margin:
-      const EdgeInsets.only(
-        bottom: 14,
-      ),
-      padding:
-      const EdgeInsets.all(
-        18,
-      ),
-      decoration:
-      BoxDecoration(
-        color: Colors.white,
-        borderRadius:
-        BorderRadius.circular(
-          18,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color:
-            Colors.black.withValues(
-              alpha: 0.06,
-            ),
-            blurRadius: 8,
-            offset:
-            const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment:
-        CrossAxisAlignment
-            .start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                backgroundColor:
-                lightPurple,
-                child: const Icon(
-                  Icons.spa,
-                  color:
-                  primaryPurple,
-                ),
-              ),
-
-              const SizedBox(
-                width: 12,
-              ),
-
-              Expanded(
-                child: Text(
-                  serviceName,
-                  style:
-                  const TextStyle(
-                    fontSize: 17,
-                    fontWeight:
-                    FontWeight.bold,
-                  ),
-                ),
-              ),
-
-              _statusBadge(
-                status,
-              ),
-            ],
-          ),
-
-          const SizedBox(
-            height: 15,
-          ),
-
-          Row(
-            children: [
-              const Icon(
-                Icons.calendar_today,
-                size: 18,
-                color:
-                primaryPurple,
-              ),
-              const SizedBox(
-                width: 8,
-              ),
-              Expanded(
-                child: Text(
-                  date,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(
-            height: 8,
-          ),
-
-          Row(
-            children: [
-              const Icon(
-                Icons.access_time,
-                size: 18,
-                color:
-                primaryPurple,
-              ),
-              const SizedBox(
-                width: 8,
-              ),
-              Text(time),
-            ],
-          ),
-
-          if (price != null) ...[
-            const SizedBox(
-              height: 10,
-            ),
-            Text(
-              'R${price.toStringAsFixed(2)}',
-              style:
-              const TextStyle(
-                color:
-                primaryPurple,
-                fontWeight:
-                FontWeight.bold,
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }
@@ -2017,25 +2154,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     return Center(
       child: Padding(
         padding:
-        const EdgeInsets.all(
-          30,
-        ),
+        const EdgeInsets.all(30),
         child: Column(
           mainAxisAlignment:
-          MainAxisAlignment
-              .center,
+          MainAxisAlignment.center,
           children: [
             Icon(
               Icons.calendar_month,
               size: 70,
-              color:
-              Colors.grey[400],
+              color: Colors.grey[400],
             ),
-
             const SizedBox(
-              height: 15,
-            ),
-
+                height: 15),
             const Text(
               'No appointments yet',
               style:
@@ -2045,39 +2175,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 FontWeight.bold,
               ),
             ),
-
             const SizedBox(
-              height: 8,
-            ),
-
+                height: 8),
             Text(
               'Your upcoming appointments will appear here.',
               textAlign:
               TextAlign.center,
-              style: TextStyle(
+              style:
+              TextStyle(
                 color:
                 Colors.grey[600],
-              ),
-            ),
-
-            const SizedBox(
-              height: 20,
-            ),
-
-            ElevatedButton.icon(
-              onPressed:
-              _openBookingPage,
-              icon: const Icon(
-                Icons.calendar_month,
-              ),
-              label:
-              const Text('BOOK NOW'),
-              style:
-              ElevatedButton.styleFrom(
-                backgroundColor:
-                primaryPurple,
-                foregroundColor:
-                Colors.white,
               ),
             ),
           ],
@@ -2122,284 +2229,194 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   // ============================================================
-  // PROFILE
-  // ============================================================
+// PROFILE TAB (Original Design with Loyalty Card Restored)
+// ============================================================
 
-  Widget _buildProfile() {
-    final User? user =
-        _currentUser;
+  Widget _buildProfileTab() {
+    final user = _currentUser;
+    final String userName = user?.displayName ?? _userName;
+    final String userEmail = user?.email ?? '';
+    final String initial =
+    userName.isNotEmpty ? userName[0].toUpperCase() : 'U';
 
     return Scaffold(
-      backgroundColor:
-      const Color(0xFFF9F7FA),
+      backgroundColor: const Color(0xFFF8F8F8), // Soft off-white background
       appBar: AppBar(
         title: const Text(
-          'My Profile',
-          style:
-          TextStyle(
-            color: Colors.black,
-            fontWeight:
-            FontWeight.bold,
-          ),
+          "My Profile",
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
-        backgroundColor:
-        Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
       ),
       body: ListView(
-        padding:
-        const EdgeInsets.all(
-          20,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         children: [
-          // PROFILE HEADER
+          // Header Card
           Container(
-            padding:
-            const EdgeInsets.all(
-              25,
-            ),
-            decoration:
-            BoxDecoration(
-              gradient:
-              const LinearGradient(
-                colors: [
-                  primaryPurple,
-                  fieldPurple,
-                ],
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF7B3F98), Color(0xFF8E44AD)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              borderRadius:
-              BorderRadius.circular(
-                24,
-              ),
+              borderRadius: BorderRadius.circular(20),
             ),
             child: Column(
               children: [
                 CircleAvatar(
-                  radius: 42,
-                  backgroundColor:
-                  Colors.white,
-                  child: Text(
-                    _userName
-                        .substring(
-                      0,
-                      1,
-                    )
-                        .toUpperCase(),
-                    style:
-                    const TextStyle(
+                  radius: 40,
+                  backgroundColor: Colors.white,
+                  backgroundImage: (user?.photoURL != null && user!.photoURL!.isNotEmpty)
+                      ? NetworkImage(user.photoURL!)
+                      : null,
+                  child: (user?.photoURL == null || user!.photoURL!.isEmpty)
+                      ? Text(
+                    initial,
+                    style: const TextStyle(
                       fontSize: 32,
-                      color:
-                      primaryPurple,
-                      fontWeight:
-                      FontWeight.bold,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF7B3F98),
                     ),
-                  ),
+                  )
+                      : null,
                 ),
-
-                const SizedBox(
-                  height: 12,
-                ),
-
+                const SizedBox(height: 12),
                 Text(
-                  _userName,
-                  style:
-                  const TextStyle(
-                    color:
-                    Colors.white,
-                    fontSize: 22,
-                    fontWeight:
-                    FontWeight.bold,
+                  userName,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
                 ),
-
-                const SizedBox(
-                  height: 5,
-                ),
-
+                const SizedBox(height: 4),
                 Text(
-                  user?.email ??
-                      'No email',
-                  style:
-                  const TextStyle(
-                    color:
-                    Colors.white70,
-                  ),
+                  userEmail,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
                 ),
               ],
             ),
           ),
+          const SizedBox(height: 16),
 
-          const SizedBox(
-            height: 25,
+          // Menu Items
+          _buildProfileMenuItem(
+            icon: Icons.person_outline,
+            title: "Personal Information",
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const UserInfoScreen()),
+            ),
           ),
-
-          _profileOption(
-            icon:
-            Icons.person_outline,
-            title:
-            'Personal Information',
-            onTap: () {
-              _showMessage(
-                'Profile editing can be connected here.',
-                isError: false,
-              );
-            },
+          _buildProfileMenuItem(
+            icon: Icons.favorite_outline,
+            title: "My Favourites",
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const FavoritesPage()),
+            ),
           ),
-
-          _profileOption(
-            icon:
-            Icons.favorite_border,
-            title:
-            'My Favourites',
-            onTap:
-            _showFavourites,
+          _buildProfileMenuItem(
+            icon: Icons.card_giftcard,
+            title: "Loyalty Card",
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const LoyaltyScreen()),
+            ),
           ),
-
-          _profileOption(
-            icon: Icons
-                .calendar_month_outlined,
-            title:
-            'My Bookings',
-            onTap: () {
-              setState(() {
-                _selectedIndex = 1;
-              });
-            },
+          _buildProfileMenuItem(
+            icon: Icons.shopping_bag_outlined,
+            title: "My Orders",
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const OrdersScreen()),
+            ),
           ),
-
-          _profileOption(
-            icon:
-            Icons.shopping_bag_outlined,
-            title:
-            'My Orders',
-            onTap: () {
-              _showMessage(
-                'Order history will appear here.',
-                isError: false,
-              );
-            },
+          _buildProfileMenuItem(
+            icon: Icons.help_outline,
+            title: "Help & Support",
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SupportScreen()),
+            ),
           ),
-
-          _profileOption(
-            icon:
-            Icons.help_outline,
-            title:
-            'Help & Support',
-            onTap: () {
-              _showMessage(
-                'Contact Kotton Kandy support.',
-                isError: false,
-              );
-            },
-          ),
-
-          _profileOption(
-            icon:
-            Icons.settings_outlined,
-            title:
-            'Settings',
-            onTap: () {
-              _showMessage(
-                'Settings will be available here.',
-                isError: false,
-              );
-            },
-          ),
-
-          const SizedBox(
-            height: 15,
-          ),
-
-          SizedBox(
-            height: 52,
-            child:
-            OutlinedButton.icon(
-              onPressed: _logout,
-              icon: const Icon(
-                Icons.logout,
-                color: Colors.red,
-              ),
-              label: const Text(
-                'LOGOUT',
-                style:
-                TextStyle(
-                  color:
-                  Colors.red,
-                  fontWeight:
-                  FontWeight.bold,
-                ),
-              ),
-              style:
-              OutlinedButton
-                  .styleFrom(
-                side:
-                const BorderSide(
-                  color: Colors.red,
-                ),
-                shape:
-                RoundedRectangleBorder(
-                  borderRadius:
-                  BorderRadius.circular(
-                    16,
-                  ),
-                ),
+          _buildProfileMenuItem(
+            icon: Icons.settings_outlined,
+            title: "Settings",
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => SettingsScreen(themeNotifier: themeNotifier),
               ),
             ),
+          ),
+          const SizedBox(height: 12),
+
+          // Logout Button
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 50),
+              backgroundColor: Colors.white,
+              side: const BorderSide(color: Color(0xFFE53935)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            icon: const Icon(Icons.logout, color: Color(0xFFE53935), size: 18),
+            label: const Text(
+              "LOGOUT",
+              style: TextStyle(
+                color: Color(0xFFE53935),
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
+            ),
+            onPressed: _logout,
           ),
         ],
       ),
     );
   }
 
-  // ============================================================
-  // PROFILE OPTION
-  // ============================================================
-
-  Widget _profileOption({
+  Widget _buildProfileMenuItem({
     required IconData icon,
     required String title,
     required VoidCallback onTap,
   }) {
     return Container(
-      margin:
-      const EdgeInsets.only(
-        bottom: 10,
-      ),
-      decoration:
-      BoxDecoration(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius:
-        BorderRadius.circular(
-          16,
-        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: ListTile(
-        onTap: onTap,
-        leading: CircleAvatar(
-          backgroundColor:
-          lightPurple,
-          child: Icon(
-            icon,
-            color:
-            primaryPurple,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3E8F7), // Light purple icon container
+            borderRadius: BorderRadius.circular(12),
           ),
+          child: Icon(icon, color: const Color(0xFF7B3F98), size: 20),
         ),
         title: Text(
           title,
-          style:
-          const TextStyle(
-            fontWeight:
-            FontWeight.w600,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
         ),
-        trailing:
-        const Icon(
-          Icons.chevron_right,
-        ),
+        trailing: const Icon(Icons.chevron_right, color: Colors.black54, size: 20),
+        onTap: onTap,
       ),
     );
   }
-
   // ============================================================
   // FAVOURITES
   // ============================================================
@@ -2409,8 +2426,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     _sampleServices
         .where(
           (service) =>
-          _favourites
-              .contains(
+          _favourites.contains(
             service['id'],
           ),
     )
@@ -2429,17 +2445,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               .height *
               0.70,
           padding:
-          const EdgeInsets.all(
-            20,
-          ),
+          const EdgeInsets.all(20),
           decoration:
           const BoxDecoration(
             color: Colors.white,
             borderRadius:
             BorderRadius.vertical(
-              top: Radius.circular(
-                28,
-              ),
+              top: Radius.circular(28),
             ),
           ),
           child: Column(
@@ -2455,39 +2467,26 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               ),
 
               const SizedBox(
-                height: 20,
-              ),
+                  height: 20),
 
               Expanded(
-                child:
-                favourites.isEmpty
+                child: favourites
+                    .isEmpty
                     ? const Center(
                   child: Text(
-                    'You have no favourite items yet.',
+                    'You have no favourite services yet.',
                   ),
                 )
-                    : ListView
-                    .builder(
+                    : ListView.builder(
                   itemCount:
                   favourites
                       .length,
                   itemBuilder:
-                      (
-                      context,
-                      index,
-                      ) {
-                    return Padding(
-                      padding:
-                      const EdgeInsets
-                          .only(
-                        bottom:
-                        12,
-                      ),
-                      child:
-                      _buildServiceCard(
-                        favourites[
-                        index],
-                      ),
+                      (context,
+                      index) {
+                    return _buildServiceCard(
+                      favourites[
+                      index],
                     );
                   },
                 ),
@@ -2505,15 +2504,46 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   Widget _buildMessages() {
     return const ChatScreen(
-      salonId:
-      'kotton_kandy',
-      salonName:
-      'Kotton Kandy',
+      salonId: 'kotton_kandy',
+      salonName: 'Kotton Kandy',
     );
   }
 
   // ============================================================
-  // CURRENT PAGE
+  // DATE FORMAT
+  // ============================================================
+
+  String _formatDate(
+      DateTime date,
+      ) {
+    const List<String> months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+
+    String hour =
+    date.hour.toString();
+
+    String minute =
+    date.minute
+        .toString()
+        .padLeft(2, '0');
+
+    return '${date.day} ${months[date.month - 1]} ${date.year} at $hour:$minute';
+  }
+
+  // ============================================================
+  // BOTTOM NAVIGATION
   // ============================================================
 
   Widget _buildCurrentPage() {
@@ -2522,13 +2552,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         return _buildDashboard();
 
       case 1:
-        return _buildBookings();
+        return const BookingPage();
 
       case 2:
         return _buildMessages();
 
       case 3:
-        return _buildProfile();
+        return _buildProfileTab();
 
       default:
         return _buildDashboard();
@@ -2544,14 +2574,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       BuildContext context,
       ) {
     return Scaffold(
-      body:
-      _buildCurrentPage(),
+      body: _buildCurrentPage(),
+
+      // ========================================================
+      // BOTTOM NAVIGATION
+      // ========================================================
 
       bottomNavigationBar:
       NavigationBar(
         selectedIndex:
         _selectedIndex,
-
         onDestinationSelected:
             (index) {
           setState(() {
@@ -2559,15 +2591,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 index;
           });
         },
-
         backgroundColor:
         Colors.white,
-
         indicatorColor:
         lightPurple,
-
         elevation: 8,
-
         destinations: const [
           NavigationDestination(
             icon: Icon(
@@ -2581,11 +2609,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             ),
             label: 'Home',
           ),
-
           NavigationDestination(
             icon: Icon(
-              Icons
-                  .calendar_today_outlined,
+              Icons.calendar_today_outlined,
             ),
             selectedIcon:
             Icon(
@@ -2595,11 +2621,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             ),
             label: 'Bookings',
           ),
-
           NavigationDestination(
             icon: Icon(
-              Icons
-                  .chat_bubble_outline,
+              Icons.chat_bubble_outline,
             ),
             selectedIcon:
             Icon(
@@ -2609,7 +2633,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             ),
             label: 'Messages',
           ),
-
           NavigationDestination(
             icon: Icon(
               Icons.person_outline,
