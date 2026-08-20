@@ -22,6 +22,8 @@ dependencies:
   firebase_database: ^12.4.7
   firebase_storage: ^13.4.6
   image_picker: ^1.1.2
+  mobile_scanner: ^5.1.1
+
 
   # Remember Me / Local Storage
   shared_preferences: ^2.5.3
