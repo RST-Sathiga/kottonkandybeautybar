@@ -11,7 +11,7 @@ class BookingService {
 }
 
 const List<BookingService> bookingServices = [
-  // Press-ons
+  // Pess-ons
 
   BookingService(name: 'Press-on installation', price: 100, category: 'Press-ons'),
 
