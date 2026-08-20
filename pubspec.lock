@@ -560,6 +560,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.3.0"
+  paystack_flutter_sdk:
+    dependency: "direct main"
+    description:
+      name: paystack_flutter_sdk
+      sha256: a8386bee7bed218517c580017a2f3112da1c0e298f3c559f4a3d3f1f7e233221
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.1-alpha.2"
   petitparser:
     dependency: transitive
     description:

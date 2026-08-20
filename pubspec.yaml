@@ -27,6 +27,7 @@ dependencies:
 
   # Remember Me / Local Storage
   shared_preferences: ^2.5.3
+  paystack_flutter_sdk: ^0.0.1-alpha.2
 
 dev_dependencies:
   flutter_test:
