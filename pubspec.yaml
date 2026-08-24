@@ -18,14 +18,14 @@ dependencies:
   firebase_core: ^4.13.0
   firebase_auth: ^6.5.7
   cloud_firestore: ^6.8.0
+  cloud_functions: ^6.3.6
   google_sign_in: ^6.2.1
   firebase_database: ^12.4.7
   firebase_storage: ^13.4.6
+
+  # Other packages
   image_picker: ^1.1.2
   mobile_scanner: ^5.1.1
-
-
-  # Remember Me / Local Storage
   shared_preferences: ^2.5.3
   paystack_flutter_sdk: ^0.0.1-alpha.2
 
@@ -34,7 +34,6 @@ dev_dependencies:
     sdk: flutter
 
   flutter_lints: ^6.0.0
-
   flutter_launcher_icons: ^0.14.3
 
 flutter_launcher_icons:
@@ -43,7 +42,6 @@ flutter_launcher_icons:
   image_path: "assets/images/kottonkandy_logo.png"
   min_sdk_android: 21
   remove_alpha_ios: true
-
 
 flutter:
   uses-material-design: true
