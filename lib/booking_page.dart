@@ -1064,9 +1064,7 @@ class _BookingPageState extends State<BookingPage> {
 
             const SizedBox(height: 25),
 
-            // =================================================
-            // PAY BUTTON
-            // =================================================
+
 
             SizedBox(
               width:

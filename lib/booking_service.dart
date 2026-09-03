@@ -129,9 +129,7 @@ const List<BookingService> bookingServices = [
     duration: '1 hour',
   ),
 
-  // ============================================================
-  // MAKEUP
-  // ============================================================
+
 
   BookingService(
     id: 'eye_brow_care',
