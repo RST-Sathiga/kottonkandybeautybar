@@ -1,9 +1,10 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
 
 class UserInfoScreen extends StatefulWidget {
   const UserInfoScreen({super.key});
@@ -15,13 +16,17 @@ class UserInfoScreen extends StatefulWidget {
 class _UserInfoScreenState extends State<UserInfoScreen> {
   static const Color primaryPurple = Color(0xFF6B3A82);
 
+  // Cloudinary Configuration
+  // 1. Get Cloud Name from Dashboard
+  // 2. Go to Settings > Upload > Add upload preset -> Set mode to "Unsigned"
+  static const String cloudinaryCloudName = 'nuqsuqyw'; // Found on Dashboard Home
+  static const String cloudinaryUploadPreset = 'profile_uploads'; // The name you just entered
   // Controllers for user details
   final _phoneController = TextEditingController();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
 
   // Controllers for password change
-  final _currentPasswordController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
@@ -31,7 +36,6 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
   bool _isChangingPassword = false;
 
   // Password visibility toggles
-  bool _obscureCurrent = true;
   bool _obscureNew = true;
   bool _obscureConfirm = true;
 
@@ -48,7 +52,6 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
     _phoneController.dispose();
     _nameController.dispose();
     _emailController.dispose();
-    _currentPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -70,11 +73,30 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
     setState(() => _isLoading = false);
   }
 
+  Future<String?> _uploadImageToCloudinary(File imageFile) async {
+    final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudinaryCloudName/image/upload');
+
+    final request = http.MultipartRequest('POST', url)
+      ..fields['upload_preset'] = cloudinaryUploadPreset
+      ..files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+
+    final response = await request.send();
+    final responseData = await response.stream.bytesToString();
+
+    if (response.statusCode == 200) {
+      final jsonResponse = jsonDecode(responseData);
+      return jsonResponse['secure_url']; // Returns hosted HTTPS URL
+    } else {
+      debugPrint('Cloudinary Upload Error: $responseData');
+      return null;
+    }
+  }
+
   Future<void> _pickAndUploadImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
       source: ImageSource.gallery,
-      imageQuality: 70,
+      imageQuality: 70, // Compresses image to optimize upload speed
     );
 
     if (pickedFile == null) return;
@@ -86,43 +108,36 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
 
     try {
       final file = File(pickedFile.path);
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('profile_images')
-          .child('${user.uid}.jpg');
 
-      await storageRef.putFile(file);
-      final downloadUrl = await storageRef.getDownloadURL();
+      // Upload to Cloudinary
+      final downloadUrl = await _uploadImageToCloudinary(file);
 
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'photoUrl': downloadUrl,
-      }, SetOptions(merge: true));
+      if (downloadUrl != null) {
+        // Save URL to Firestore & Auth Profile
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'photoUrl': downloadUrl,
+        }, SetOptions(merge: true));
 
-      await user.updatePhotoURL(downloadUrl);
+        await user.updatePhotoURL(downloadUrl);
 
-      setState(() {
-        _profileImageUrl = downloadUrl;
-      });
+        setState(() {
+          _profileImageUrl = downloadUrl;
+        });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Profile picture updated successfully!"),
-            backgroundColor: primaryPurple,
-          ),
-        );
+        if (mounted) {
+          _showMessage("Profile picture updated successfully!", isError: false);
+        }
+      } else {
+        if (mounted) {
+          _showMessage("Failed to upload image to server.", isError: true);
+        }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Failed to upload image: $e"),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showMessage("Error picking image: $e", isError: true);
       }
     } finally {
-      setState(() => _isUploadingImage = false);
+      if (mounted) setState(() => _isUploadingImage = false);
     }
   }
 
@@ -137,22 +152,12 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
         }, SetOptions(merge: true));
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Personal information updated successfully!"),
-              backgroundColor: primaryPurple,
-            ),
-          );
+          _showMessage("Personal information updated successfully!", isError: false);
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Failed to update information: $e"),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showMessage("Failed to update information: $e", isError: true);
       }
     } finally {
       if (mounted) setState(() => _isSavingInfo = false);
@@ -160,11 +165,10 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
   }
 
   Future<void> _changePassword() async {
-    final currentPassword = _currentPasswordController.text.trim();
     final newPassword = _newPasswordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
 
-    if (currentPassword.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) {
+    if (newPassword.isEmpty || confirmPassword.isEmpty) {
       _showMessage("Please fill in all password fields.", isError: true);
       return;
     }
@@ -183,18 +187,9 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
 
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user != null && user.email != null) {
-        // 1. Re-authenticate user with current password
-        final cred = EmailAuthProvider.credential(
-          email: user.email!,
-          password: currentPassword,
-        );
-        await user.reauthenticateWithCredential(cred);
-
-        // 2. Update password in Firebase Auth
+      if (user != null) {
         await user.updatePassword(newPassword);
 
-        _currentPasswordController.clear();
         _newPasswordController.clear();
         _confirmPasswordController.clear();
 
@@ -202,9 +197,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
       }
     } on FirebaseAuthException catch (e) {
       String message = "Failed to update password.";
-      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
-        message = "Current password is incorrect.";
-      } else if (e.code == 'weak-password') {
+      if (e.code == 'weak-password') {
         message = "The new password is too weak.";
       } else if (e.code == 'requires-recent-login') {
         message = "Please log out and log back in before updating your password.";
@@ -292,7 +285,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
           ),
           const SizedBox(height: 24),
 
-          // Personal Details
+          // Personal Details Fields
           TextField(
             controller: _nameController,
             enabled: false,
@@ -375,7 +368,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
           const Divider(height: 1),
           const SizedBox(height: 24),
 
-          // Change Password Section Header
+          // Change Password Section
           const Text(
             "Change Password",
             style: TextStyle(
@@ -386,31 +379,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Current Password
-          TextField(
-            controller: _currentPasswordController,
-            obscureText: _obscureCurrent,
-            decoration: InputDecoration(
-              labelText: "Current Password",
-              prefixIcon: const Icon(Icons.lock_outline, color: primaryPurple),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscureCurrent ? Icons.visibility_off : Icons.visibility,
-                  color: Colors.grey,
-                ),
-                onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
-              ),
-              filled: true,
-              fillColor: const Color(0xFFFAF0F5),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // New Password
+          // New Password Field
           TextField(
             controller: _newPasswordController,
             obscureText: _obscureNew,
@@ -434,7 +403,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Confirm New Password
+          // Confirm New Password Field
           TextField(
             controller: _confirmPasswordController,
             obscureText: _obscureConfirm,

@@ -7,40 +7,19 @@
 //   1. Data models   (ChatMessage, ChatSummary)
 //   2. Chat service  (all Firestore reads/writes)
 //   3. ChatScreen    (the chat UI for the "Messages" tab)
-//
-// HOW TO LINK IT UP
-// ------------------
-// Nothing in marketplace.dart needs to change structurally.
-// Wherever the message icon / Messages tab currently returns its
-// placeholder widget, just return this instead:
-//
-//   Widget _buildMessages() {
-//     return const ChatScreen(
-//       salonId: 'kotton_kandy',
-//       salonName: 'Kotton Kandy',
-//     );
-//   }
-//
-// That's the entire link — one return statement. ChatScreen
-// creates/opens the Firestore conversation itself the moment it
-// is built, so no other setup is required.
 // ============================================================
 
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-
+import 'package:http/http.dart' as http;
 
 // ============================================================
 // SENDER TYPE
-//
-// Every message is sent either by the client (the person using
-// the marketplace app) or by the salon owner (replying from
-// their own owner-facing app).
 // ============================================================
 
 enum SenderType { client, salon }
@@ -55,8 +34,6 @@ String senderTypeToString(SenderType type) {
 
 // ============================================================
 // CHAT MESSAGE
-//
-// A single message inside chats/{chatId}/messages/{messageId}
 // ============================================================
 
 class ChatMessage {
@@ -88,7 +65,7 @@ class ChatMessage {
       text: data['text']?.toString() ?? '',
       imageUrl: data['imageUrl']?.toString(),
       timestamp:
-          (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
       read: data['read'] == true,
     );
   }
@@ -96,10 +73,6 @@ class ChatMessage {
 
 // ============================================================
 // CHAT SUMMARY
-//
-// The parent chats/{chatId} document. One document per
-// (client, salon) pair. Used to build the salon owner's inbox
-// list and to show unread badges.
 // ============================================================
 
 class ChatSummary {
@@ -139,7 +112,7 @@ class ChatSummary {
       lastMessage: data['lastMessage']?.toString() ?? '',
       lastMessageTime: (data['lastMessageTime'] as Timestamp?)?.toDate(),
       lastMessageSenderType:
-          senderTypeFromString(data['lastMessageSenderType']?.toString()),
+      senderTypeFromString(data['lastMessageSenderType']?.toString()),
       unreadForClient: (data['unreadForClient'] as num?)?.toInt() ?? 0,
       unreadForSalon: (data['unreadForSalon'] as num?)?.toInt() ?? 0,
     );
@@ -148,35 +121,6 @@ class ChatSummary {
 
 // ============================================================
 // CHAT SERVICE
-//
-// Single source of truth for all chat reads/writes. Both the
-// client-facing marketplace app and the salon owner's app use
-// this exact same service, so messages sent by either side are
-// always written to (and read from) the same Firestore data.
-//
-// FIRESTORE SCHEMA
-// -----------------
-// chats (collection)
-//   {clientId}_{salonId} (document)
-//     clientId            : string
-//     clientName          : string
-//     salonId             : string
-//     salonName           : string
-//     lastMessage         : string
-//     lastMessageTime     : timestamp
-//     lastMessageSenderType : 'client' | 'salon'
-//     unreadForClient     : number
-//     unreadForSalon      : number
-//     createdAt           : timestamp
-//
-//     messages (subcollection)
-//       {messageId} (document)
-//         senderId   : string  (Firebase Auth uid)
-//         senderType : 'client' | 'salon'
-//         text       : string
-//         imageUrl   : string | null
-//         timestamp  : timestamp
-//         read       : bool
 // ============================================================
 
 class ChatService {
@@ -190,26 +134,12 @@ class ChatService {
   CollectionReference<Map<String, dynamic>> get _chats =>
       _firestore.collection('chats');
 
-  // ============================================================
-  // CHAT ID
-  //
-  // Deterministic id so the client and the salon always land on
-  // the same conversation document, with no lookup required.
-  // ============================================================
-
   String chatIdFor({
     required String clientId,
     required String salonId,
   }) {
     return '${clientId}_$salonId';
   }
-
-  // ============================================================
-  // GET OR CREATE CHAT
-  //
-  // Called from the CLIENT side (marketplace app) the first
-  // time the "Messages" tab is opened for a given salon.
-  // ============================================================
 
   Future<String> getOrCreateChat({
     required String salonId,
@@ -224,9 +154,9 @@ class ChatService {
     final String clientId = user.uid;
 
     final String clientName =
-        (user.displayName != null && user.displayName!.trim().isNotEmpty)
-            ? user.displayName!.trim()
-            : (user.email?.split('@').first ?? 'Client');
+    (user.displayName != null && user.displayName!.trim().isNotEmpty)
+        ? user.displayName!.trim()
+        : (user.email?.split('@').first ?? 'Client');
 
     final String chatId = chatIdFor(clientId: clientId, salonId: salonId);
     final DocumentReference<Map<String, dynamic>> docRef = _chats.doc(chatId);
@@ -250,13 +180,6 @@ class ChatService {
     return chatId;
   }
 
-  // ============================================================
-  // MESSAGES STREAM
-  //
-  // Real-time list of messages for a single conversation,
-  // newest first (the chat UI renders it in a reversed ListView).
-  // ============================================================
-
   Stream<List<ChatMessage>> messagesStream(String chatId) {
     return _chats
         .doc(chatId)
@@ -265,29 +188,15 @@ class ChatService {
         .snapshots()
         .map(
           (snapshot) =>
-              snapshot.docs.map((doc) => ChatMessage.fromDoc(doc)).toList(),
-        );
+          snapshot.docs.map((doc) => ChatMessage.fromDoc(doc)).toList(),
+    );
   }
-
-  // ============================================================
-  // SINGLE CHAT STREAM
-  //
-  // Used to show the other party's name / last-seen style info
-  // in the chat app bar and to react to unread-count changes.
-  // ============================================================
 
   Stream<ChatSummary?> chatStream(String chatId) {
     return _chats.doc(chatId).snapshots().map(
           (doc) => doc.exists ? ChatSummary.fromDoc(doc) : null,
-        );
+    );
   }
-
-  // ============================================================
-  // SALON INBOX STREAM
-  //
-  // Called from the SALON OWNER'S app: every conversation a
-  // given salon is part of, most recently active first.
-  // ============================================================
 
   Stream<List<ChatSummary>> salonChatsStream(String salonId) {
     return _chats
@@ -296,18 +205,9 @@ class ChatService {
         .snapshots()
         .map(
           (snapshot) =>
-              snapshot.docs.map((doc) => ChatSummary.fromDoc(doc)).toList(),
-        );
+          snapshot.docs.map((doc) => ChatSummary.fromDoc(doc)).toList(),
+    );
   }
-
-  // ============================================================
-  // SEND MESSAGE
-  //
-  // Writes the message itself AND updates the parent chat
-  // document (last message preview + unread counters) in one
-  // atomic batch, so the inbox list and the chat badge never
-  // fall out of sync.
-  // ============================================================
 
   Future<void> sendMessage({
     required String chatId,
@@ -329,7 +229,7 @@ class ChatService {
 
     final DocumentReference<Map<String, dynamic>> chatRef = _chats.doc(chatId);
     final DocumentReference<Map<String, dynamic>> messageRef =
-        chatRef.collection('messages').doc();
+    chatRef.collection('messages').doc();
 
     final bool isClient = senderType == SenderType.client;
     final WriteBatch batch = _firestore.batch();
@@ -350,22 +250,15 @@ class ChatService {
         'lastMessageTime': FieldValue.serverTimestamp(),
         'lastMessageSenderType': senderTypeToString(senderType),
         'unreadForSalon':
-            isClient ? FieldValue.increment(1) : FieldValue.increment(0),
+        isClient ? FieldValue.increment(1) : FieldValue.increment(0),
         'unreadForClient':
-            isClient ? FieldValue.increment(0) : FieldValue.increment(1),
+        isClient ? FieldValue.increment(0) : FieldValue.increment(1),
       },
       SetOptions(merge: true),
     );
 
     await batch.commit();
   }
-
-  // ============================================================
-  // MARK READ
-  //
-  // Zeroes out the reader's unread counter and flags the other
-  // party's messages as read (for read-receipt ticks).
-  // ============================================================
 
   Future<void> markRead({
     required String chatId,
@@ -376,13 +269,13 @@ class ChatService {
     await chatRef.set(
       {
         readerType == SenderType.client ? 'unreadForClient' : 'unreadForSalon':
-            0,
+        0,
       },
       SetOptions(merge: true),
     );
 
     final String otherType =
-        readerType == SenderType.client ? 'salon' : 'client';
+    readerType == SenderType.client ? 'salon' : 'client';
 
     final QuerySnapshot<Map<String, dynamic>> unread = await chatRef
         .collection('messages')
@@ -406,20 +299,6 @@ class ChatService {
 
 // ============================================================
 // CLIENT CHAT SCREEN
-//
-// Drop this straight into the "Messages" tab of the marketplace
-// app. It opens (or creates) the one conversation between the
-// signed-in client and the given salon, and keeps it in sync in
-// real time with Firestore.
-//
-// Usage from marketplace.dart:
-//
-//   Widget _buildMessages() {
-//     return const ChatScreen(
-//       salonId: 'kotton_kandy',
-//       salonName: 'Kotton Kandy',
-//     );
-//   }
 // ============================================================
 
 class ChatScreen extends StatefulWidget {
@@ -439,6 +318,9 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   static const Color primaryPurple = Color(0xFF6B3A82);
   static const Color lightPurple = Color(0xFFF3EAF6);
+
+  static const String cloudinaryCloudName = 'nuqsuqyw';
+  static const String cloudinaryUploadPreset = 'profile_uploads';
 
   final ChatService _chatService = ChatService.instance;
   final TextEditingController _messageController = TextEditingController();
@@ -462,10 +344,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollController.dispose();
     super.dispose();
   }
-
-  // ============================================================
-  // INIT — get or create the chat, then mark it read.
-  // ============================================================
 
   Future<void> _init() async {
     try {
@@ -495,10 +373,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ============================================================
-  // SEND TEXT MESSAGE
-  // ============================================================
-
   Future<void> _sendMessage() async {
     final String text = _messageController.text;
 
@@ -522,9 +396,24 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ============================================================
-  // SEND IMAGE (e.g. a reference photo / inspiration picture)
-  // ============================================================
+  Future<String?> _uploadImageToCloudinary(File imageFile) async {
+    final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudinaryCloudName/image/upload');
+
+    final request = http.MultipartRequest('POST', url)
+      ..fields['upload_preset'] = cloudinaryUploadPreset
+      ..files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+
+    final response = await request.send();
+    final responseData = await response.stream.bytesToString();
+
+    if (response.statusCode == 200) {
+      final jsonResponse = jsonDecode(responseData);
+      return jsonResponse['secure_url'];
+    } else {
+      debugPrint('Cloudinary Chat Upload Error: $responseData');
+      return null;
+    }
+  }
 
   Future<void> _sendImage() async {
     if (_chatId == null || _uploadingImage) return;
@@ -540,20 +429,18 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _uploadingImage = true);
 
     try {
-      final String path =
-          'chat_images/$_chatId/${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final file = File(picked.path);
+      final String? url = await _uploadImageToCloudinary(file);
 
-      final UploadTask task =
-          FirebaseStorage.instance.ref(path).putFile(File(picked.path));
-
-      final TaskSnapshot snapshot = await task;
-      final String url = await snapshot.ref.getDownloadURL();
-
-      await _chatService.sendMessage(
-        chatId: _chatId!,
-        senderType: SenderType.client,
-        imageUrl: url,
-      );
+      if (url != null) {
+        await _chatService.sendMessage(
+          chatId: _chatId!,
+          senderType: SenderType.client,
+          imageUrl: url,
+        );
+      } else {
+        _showSnack('Could not send image. Upload failed.');
+      }
     } catch (e) {
       _showSnack('Could not send image. Please try again.');
     } finally {
@@ -566,10 +453,6 @@ class _ChatScreenState extends State<ChatScreen> {
       SnackBar(content: Text(message)),
     );
   }
-
-  // ============================================================
-  // BUILD
-  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -637,10 +520,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // ============================================================
-  // MESSAGE LIST
-  // ============================================================
-
   Widget _buildMessageList() {
     return StreamBuilder<List<ChatMessage>>(
       stream: _chatService.messagesStream(_chatId!),
@@ -685,8 +564,6 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         }
 
-        // New unread salon messages arriving while the screen is
-        // open should still be marked read.
         _chatService.markRead(
           chatId: _chatId!,
           readerType: SenderType.client,
@@ -804,10 +681,6 @@ class _ChatScreenState extends State<ChatScreen> {
     return '$hour:$minute $period';
   }
 
-  // ============================================================
-  // INPUT BAR
-  // ============================================================
-
   Widget _buildInputBar() {
     return SafeArea(
       child: Container(
@@ -828,13 +701,13 @@ class _ChatScreenState extends State<ChatScreen> {
               onPressed: _uploadingImage ? null : _sendImage,
               icon: _uploadingImage
                   ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: primaryPurple,
-                      ),
-                    )
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: primaryPurple,
+                ),
+              )
                   : const Icon(Icons.image_outlined, color: primaryPurple),
             ),
             Expanded(
@@ -867,13 +740,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 onPressed: _sending ? null : _sendMessage,
                 icon: _sending
                     ? const SizedBox(
-                        height: 16,
-                        width: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
+                  height: 16,
+                  width: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
                     : const Icon(Icons.send, color: Colors.white, size: 18),
               ),
             ),
