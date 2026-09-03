@@ -119,9 +119,7 @@ class PaymentInitialization {
   });
 }
 
-// ============================================================
-// PAYMENT VERIFICATION MODEL
-// ============================================================
+
 
 class PaymentVerification {
   final bool success;
