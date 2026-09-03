@@ -18,9 +18,7 @@ class BookingPage extends StatefulWidget {
 }
 
 class _BookingPageState extends State<BookingPage> {
-  // ============================================================
-  // FIREBASE & AUTH
-  // ============================================================
+
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -386,9 +384,7 @@ class _BookingPageState extends State<BookingPage> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // ========================================================
-      // 4. INITIALIZE PAYSTACK PAYMENT
-      // ========================================================
+
 
       final PaymentInitialization payment =
       await _paymentService.initializePayment(
@@ -398,9 +394,7 @@ class _BookingPageState extends State<BookingPage> {
         serviceName: _selectedService!['name'],
       );
 
-      // ========================================================
-      // 5. SAVE PAYMENT REFERENCE
-      // ========================================================
+
 
       await bookingRef.update({
         'paymentReference': payment.reference,
