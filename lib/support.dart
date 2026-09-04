@@ -16,7 +16,7 @@ class _SupportScreenState extends State<SupportScreen> {
   final List<Map<String, String>> _faqs = [
     {
       "question": "How do I earn loyalty points?",
-      "answer": "You earn loyalty points automatically every time you complete a booking or make a purchase through the app. 100 points equals \$1 off your next order."
+      "answer": "You earn loyalty points automatically every time you complete a booking or make a purchase through the app. 100 points equals \R1 off your next order."
     },
     {
       "question": "How do I cancel or reschedule a booking?",
