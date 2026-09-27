@@ -5,9 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'legal_pages.dart'; // Import the newly created legal pages
 
 class SettingsScreen extends StatefulWidget {
-  final ValueNotifier<ThemeMode>? themeNotifier;
-
-  const SettingsScreen({super.key, this.themeNotifier});
+  const SettingsScreen({super.key});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -17,7 +15,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   static const Color primaryPurple = Color(0xFF6B3A82);
 
   // Toggle state variables
-  bool darkMode = false;
   bool pushNotifications = true;
   bool emailNotifications = true;
   bool promoAlerts = false;
@@ -31,22 +28,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      darkMode = prefs.getBool('isDarkMode') ?? false;
       pushNotifications = prefs.getBool('pushNotifications') ?? true;
       emailNotifications = prefs.getBool('emailNotifications') ?? true;
       promoAlerts = prefs.getBool('promoAlerts') ?? false;
     });
-  }
-
-  Future<void> _toggleDarkMode(bool val) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isDarkMode', val);
-
-    setState(() => darkMode = val);
-
-    if (widget.themeNotifier != null) {
-      widget.themeNotifier!.value = val ? ThemeMode.dark : ThemeMode.light;
-    }
   }
 
   Future<void> _savePreference(String key, bool val) async {
@@ -86,17 +71,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // APP PREFERENCES
-          _buildSectionHeader("App Preferences"),
-          SwitchListTile(
-            activeThumbColor: primaryPurple,
-            title: const Text("Dark Mode", style: TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: const Text("Switch between light and dark theme"),
-            value: darkMode,
-            onChanged: _toggleDarkMode,
-          ),
-          const Divider(),
-
           // NOTIFICATIONS
           _buildSectionHeader("Notifications"),
           SwitchListTile(
@@ -122,7 +96,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SwitchListTile(
             activeThumbColor: primaryPurple,
             title: const Text("Promotional Alerts", style: TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: const Text("Get special discounts and loyalty offers"),
+            subtitle: const Text("Get special Rand discounts (R) and loyalty offers"),
             value: promoAlerts,
             onChanged: (val) {
               setState(() => promoAlerts = val);
@@ -177,7 +151,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 builder: (ctx) => AlertDialog(
                   title: const Text("Delete Account?"),
                   content: const Text(
-                    "This action cannot be undone. All your profile data and loyalty points will be removed.",
+                    "This action cannot be undone. All your profile data, stored balances (R), and loyalty points will be removed.",
                   ),
                   actions: [
                     TextButton(
