@@ -46,6 +46,8 @@
 				</dict>
 			</array>
 		</dict>
+		<key>NSLocationWhenInUseUsageDescription</key>
+        <string>We need your location to find the nearest delivery kiosks.</string>
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>

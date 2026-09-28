@@ -194,7 +194,6 @@ class MyApp extends StatelessWidget {
 
           routes: {
             '/booking': (context) => const BookingPage(),
-            '/settings': (context) => SettingsScreen(themeNotifier: themeNotifier),
             '/loyalty': (context) => const LoyaltyScreen(),
           },
         );
