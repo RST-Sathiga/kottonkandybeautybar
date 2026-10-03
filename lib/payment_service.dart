@@ -29,7 +29,7 @@ class PaymentVerification {
 
 class PaymentService {
   // Replace with your actual Paystack Test Secret Key (sk_test_...)
-  static const String _secretKey = 'sk_test_4b984d7286e84469dcd20af4ceaecf6cbe156afe';
+  static const String _secretKey = 'sk_test_e1d850daf881ea45ec7e9ee84577c7cffd672f16';
 
   Future<PaystackInitResult> initializePayment({
     required String email,

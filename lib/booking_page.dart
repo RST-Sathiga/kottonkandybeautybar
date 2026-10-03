@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'payment_service.dart';
 import 'paystack_checkout_screen.dart';
@@ -21,33 +24,19 @@ class BookingPage extends StatefulWidget {
 class _BookingPageState extends State<BookingPage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  // ============================================================
-  // PAYMENT SERVICE
-  // ============================================================
-
+  final FirebaseStorage _storage = FirebaseStorage.instance;
   final PaymentService _paymentService = PaymentService();
-
-  // ============================================================
-  // COLOURS
-  // ============================================================
 
   static const Color primaryPurple = Color(0xFF6B3A82);
   static const Color lightPurple = Color(0xFFF3EAF6);
-
-  // ============================================================
-  // STATE VARIABLES
-  // ============================================================
 
   String _selectedCategory = 'Press-ons';
   Map<String, dynamic>? _selectedService;
   DateTime? _selectedDate;
   String? _selectedTimeSlot;
   bool _isLoading = false;
-
-  // ============================================================
-  // CATEGORIES
-  // ============================================================
+  File? _referenceImage;
+  List<String> _availableTimeSlots = [];
 
   final List<String> _categories = [
     'Press-ons',
@@ -56,18 +45,14 @@ class _BookingPageState extends State<BookingPage> {
     'Makeup',
   ];
 
-  // ============================================================
-  // SALON SERVICES
-  // ============================================================
-
   final List<Map<String, dynamic>> _salonServices = [
-    // PRESS-ONS
     {
       'id': 'press_on_plain',
       'name': 'Press-on Plain',
       'category': 'Press-ons',
       'description': 'Clean, simple, solid-color press-on set application.',
       'price': 250.00,
+      'durationMins': 45,
       'duration': '45 mins',
       'icon': Icons.back_hand,
     },
@@ -77,6 +62,7 @@ class _BookingPageState extends State<BookingPage> {
       'category': 'Press-ons',
       'description': 'Glamorous press-on set with intricate design elements.',
       'price': 350.00,
+      'durationMins': 60,
       'duration': '1 hour',
       'icon': Icons.brush,
     },
@@ -86,17 +72,17 @@ class _BookingPageState extends State<BookingPage> {
       'category': 'Press-ons',
       'description': 'Professional sizing, prep, and long-lasting application.',
       'price': 100.00,
+      'durationMins': 30,
       'duration': '30 mins',
       'icon': Icons.pan_tool_alt,
     },
-
-    // LASHES
     {
       'id': 'cluster_lashes',
       'name': 'Cluster Lashes',
       'category': 'Lashes',
       'description': 'Full, beautiful cluster lash application.',
       'price': 200.00,
+      'durationMins': 45,
       'duration': '45 mins',
       'icon': Icons.visibility,
     },
@@ -106,6 +92,7 @@ class _BookingPageState extends State<BookingPage> {
       'category': 'Lashes',
       'description': 'Natural-looking individual lash extensions.',
       'price': 250.00,
+      'durationMins': 90,
       'duration': '1 hour 30 mins',
       'icon': Icons.visibility_outlined,
     },
@@ -115,45 +102,28 @@ class _BookingPageState extends State<BookingPage> {
       'category': 'Lashes',
       'description': 'Full and fluffy volume lash extensions.',
       'price': 300.00,
+      'durationMins': 120,
       'duration': '2 hours',
       'icon': Icons.remove_red_eye,
     },
-    {
-      'id': 'hybrid_lashes',
-      'name': 'Hybrid Lashes',
-      'category': 'Lashes',
-      'description': 'Combination of classic and volume techniques.',
-      'price': 350.00,
-      'duration': '1 hour 45 mins',
-      'icon': Icons.remove_red_eye_outlined,
-    },
-    {
-      'id': 'eyelash_removal',
-      'name': 'Eyelash Removal',
-      'category': 'Lashes',
-      'description': 'Safe and gentle removal of existing lash extensions.',
-      'price': 50.00,
-      'duration': '30 mins',
-      'icon': Icons.disabled_visible,
-    },
-
-    // HAIR
     {
       'id': 'afro_crotchet',
       'name': 'Afro Crotchet',
       'category': 'Hair',
       'description': 'Neat and lightweight Afro crotchet installation.',
       'price': 350.00,
+      'durationMins': 120,
       'duration': '2 hours',
       'icon': Icons.face_retouching_natural,
     },
     {
-      'id': 'wig_lines',
-      'name': 'Wig Lines',
+      'id': 'box_braids',
+      'name': 'Knotless / Box Braids',
       'category': 'Hair',
-      'description': 'Flat, secure cornrow base for comfortable wig wear.',
-      'price': 150.00,
-      'duration': '45 mins',
+      'description': 'Full head protective braiding.',
+      'price': 600.00,
+      'durationMins': 240,
+      'duration': '4 hours',
       'icon': Icons.spa,
     },
     {
@@ -162,28 +132,9 @@ class _BookingPageState extends State<BookingPage> {
       'category': 'Hair',
       'description': 'Professional wig fitting, melting, and styling.',
       'price': 400.00,
+      'durationMins': 90,
       'duration': '1 hour 30 mins',
       'icon': Icons.face,
-    },
-    {
-      'id': 'keratin_wig_care',
-      'name': 'Keratin Wig Care',
-      'category': 'Hair',
-      'description': 'Restorative keratin wash, deep condition, and revival.',
-      'price': 250.00,
-      'duration': '1 hour',
-      'icon': Icons.clean_hands,
-    },
-
-    // MAKEUP
-    {
-      'id': 'eye_brow_care',
-      'name': 'Eye Brow Care',
-      'category': 'Makeup',
-      'description': 'Precision eyebrow shaping, trimming, and grooming.',
-      'price': 200.00,
-      'duration': '30 mins',
-      'icon': Icons.edit,
     },
     {
       'id': 'soft_glam',
@@ -191,6 +142,7 @@ class _BookingPageState extends State<BookingPage> {
       'category': 'Makeup',
       'description': 'Seamless, radiant neutral glam makeup.',
       'price': 400.00,
+      'durationMins': 60,
       'duration': '1 hour',
       'icon': Icons.auto_awesome,
     },
@@ -200,105 +152,194 @@ class _BookingPageState extends State<BookingPage> {
       'category': 'Makeup',
       'description': 'Full coverage, dramatic eye look, cut crease, and lashes.',
       'price': 500.00,
+      'durationMins': 90,
       'duration': '1 hour 30 mins',
       'icon': Icons.auto_fix_high,
     },
   ];
 
-  // ============================================================
-  // AVAILABLE TIME SLOTS
-  // ============================================================
-
-  final List<String> _timeSlots = [
-    '09:00 AM',
-    '10:30 AM',
-    '12:00 PM',
-    '01:30 PM',
-    '03:00 PM',
-    '04:30 PM',
-  ];
-
-  // ============================================================
-  // INIT
-  // ============================================================
-
   @override
   void initState() {
     super.initState();
-
     if (widget.preselectedService != null) {
       _selectedService = widget.preselectedService;
-      _selectedCategory =
-          widget.preselectedService!['category'] ?? 'Press-ons';
+      _selectedCategory = widget.preselectedService!['category'] ?? 'Press-ons';
     }
   }
 
-  // ============================================================
-  // SHOW MESSAGE
-  // ============================================================
-
-  void _showMessage(
-      String message, {
-        bool isError = true,
-      }) {
+  void _showMessage(String message, {bool isError = true}) {
     if (!mounted) return;
-
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor:
-          isError ? Colors.red.shade700 : Colors.green.shade700,
+          backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
   }
-
-  // ============================================================
-  // DATE STRING
-  // ============================================================
 
   String _getDateString(DateTime date) {
     return date.toIso8601String().split('T')[0];
   }
 
-  // ============================================================
-  // CONVERT RAND TO CENTS
-  // ============================================================
-
   int _amountInCents(double amount) {
     return (amount * 100).round();
   }
 
-  // ============================================================
-  // CHECK IF TIME SLOT IS AVAILABLE
-  // ============================================================
-
-  Future<bool> _isSlotAvailable() async {
-    if (_selectedDate == null || _selectedTimeSlot == null) {
-      return false;
+  Future<void> _generateAvailableTimeSlots() async {
+    if (_selectedDate == null || _selectedService == null) {
+      setState(() => _availableTimeSlots = []);
+      return;
     }
 
-    final String date = _getDateString(_selectedDate!);
+    setState(() => _isLoading = true);
 
-    final QuerySnapshot snapshot = await _firestore
-        .collection('appointments')
-        .where('date', isEqualTo: date)
-        .where('timeSlot', isEqualTo: _selectedTimeSlot)
-        .where('status', whereIn: ['Pending Payment', 'Confirmed', 'Paid', 'pending', 'confirmed', 'paid'])
-        .limit(1)
-        .get();
+    try {
+      final bool isWeekend = _selectedDate!.weekday == DateTime.saturday ||
+          _selectedDate!.weekday == DateTime.sunday;
 
-    return snapshot.docs.isEmpty;
+      List<DateTime> potentialStarts = [];
+
+      if (isWeekend) {
+        DateTime current = DateTime(
+          _selectedDate!.year,
+          _selectedDate!.month,
+          _selectedDate!.day,
+          8,
+          0,
+        );
+        final DateTime endOfDay = DateTime(
+          _selectedDate!.year,
+          _selectedDate!.month,
+          _selectedDate!.day + 1,
+          0,
+          0,
+        );
+
+        while (current.isBefore(endOfDay)) {
+          potentialStarts.add(current);
+          current = current.add(const Duration(hours: 1, minutes: 30));
+        }
+      } else {
+        potentialStarts.add(DateTime(
+          _selectedDate!.year,
+          _selectedDate!.month,
+          _selectedDate!.day,
+          19,
+          0,
+        ));
+        potentialStarts.add(DateTime(
+          _selectedDate!.year,
+          _selectedDate!.month,
+          _selectedDate!.day,
+          21,
+          0,
+        ));
+      }
+
+      final String dateStr = _getDateString(_selectedDate!);
+      final QuerySnapshot existingBookings = await _firestore
+          .collection('appointments')
+          .where('date', isEqualTo: dateStr)
+          .where('status', whereIn: ['pending', 'confirmed', 'paid', 'Confirmed', 'Paid'])
+          .get();
+
+      List<Map<String, DateTime>> bookedRanges = [];
+
+      for (var doc in existingBookings.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final String timeSlot = data['timeSlot'] ?? '';
+        final int durationMins = data['durationMins'] ?? 60;
+
+        if (timeSlot.isNotEmpty) {
+          final DateTime? startTime = _parseTimeString(_selectedDate!, timeSlot);
+          if (startTime != null) {
+            final DateTime endTime = startTime.add(Duration(minutes: durationMins));
+            bookedRanges.add({'start': startTime, 'end': endTime});
+          }
+        }
+      }
+
+      final int selectedDurationMins = _selectedService!['durationMins'] ?? 60;
+      List<String> validSlots = [];
+
+      for (var start in potentialStarts) {
+        final DateTime proposedEnd = start.add(Duration(minutes: selectedDurationMins));
+        bool isOverlapping = false;
+
+        for (var booked in bookedRanges) {
+          if (start.isBefore(booked['end']!) && proposedEnd.isAfter(booked['start']!)) {
+            isOverlapping = true;
+            break;
+          }
+        }
+
+        if (!isOverlapping) {
+          validSlots.add(_formatTimeOfDay(start));
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _availableTimeSlots = validSlots;
+        });
+      }
+    } catch (e) {
+      _showMessage('Failed to load time slots: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
-  // ============================================================
-  // START PAYMENT + BOOKING
-  // ============================================================
+  DateTime? _parseTimeString(DateTime baseDate, String timeStr) {
+    try {
+      final parts = timeStr.trim().split(' ');
+      final timeParts = parts[0].split(':');
+      int hour = int.parse(timeParts[0]);
+      int minute = int.parse(timeParts[1]);
+      if (parts[1].toUpperCase() == 'PM' && hour < 12) hour += 12;
+      if (parts[1].toUpperCase() == 'AM' && hour == 12) hour = 0;
+      return DateTime(baseDate.year, baseDate.month, baseDate.day, hour, minute);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _formatTimeOfDay(DateTime dt) {
+    int hour = dt.hour;
+    final String period = hour >= 12 ? 'PM' : 'AM';
+    if (hour == 0) hour = 12;
+    if (hour > 12) hour -= 12;
+    final String hourStr = hour.toString().padLeft(2, '0');
+    final String minStr = dt.minute.toString().padLeft(2, '0');
+    return '$hourStr:$minStr $period';
+  }
+
+  Future<void> _pickReferenceImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (image != null) {
+      setState(() {
+        _referenceImage = File(image.path);
+      });
+    }
+  }
+
+  Future<String?> _uploadReferenceImage(String bookingId) async {
+    if (_referenceImage == null) return null;
+    try {
+      final Reference ref = _storage.ref().child('reference_photos/$bookingId.jpg');
+      final UploadTask task = ref.putFile(_referenceImage!);
+      final TaskSnapshot snapshot = await task;
+      return await snapshot.ref.getDownloadURL();
+    } catch (e) {
+      debugPrint('Error uploading image: $e');
+      return null;
+    }
+  }
 
   Future<void> _submitBooking() async {
     if (_selectedService == null) {
@@ -317,63 +358,44 @@ class _BookingPageState extends State<BookingPage> {
     }
 
     final User? user = _auth.currentUser;
-
-    if (user == null) {
-      _showMessage('You must be logged in to book an appointment.');
+    if (user == null || user.email == null || user.email!.isEmpty) {
+      _showMessage('Please log in with a valid email account before booking.');
       return;
     }
 
-    if (user.email == null || user.email!.isEmpty) {
-      _showMessage('Your account needs an email address before payment.');
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     String? bookingId;
 
     try {
-      // 1. CHECK SLOT AVAILABILITY
-      final bool available = await _isSlotAvailable();
-      if (!available) {
-        throw Exception(
-          'This time slot is already booked. Please choose another time.',
-        );
-      }
-
-      // 2. GET PRICE IN CENTS
       final double price = (_selectedService!['price'] as num).toDouble();
       final int amountInCents = _amountInCents(price);
 
-      // 3. CREATE PENDING BOOKING
-      final DocumentReference bookingRef =
-      _firestore.collection('appointments').doc();
+      final DocumentReference bookingRef = _firestore.collection('appointments').doc();
       bookingId = bookingRef.id;
 
+      final String? imageUrl = await _uploadReferenceImage(bookingId);
       final String formattedDate = _getDateString(_selectedDate!);
 
       await bookingRef.set({
         'id': bookingId,
         'bookingId': bookingId,
         'userId': user.uid,
-        'userEmail': user.email ?? 'Unknown',
+        'userEmail': user.email,
         'serviceId': _selectedService!['id'],
         'serviceName': _selectedService!['name'],
         'category': _selectedService!['category'],
         'price': price,
-        'amountInCents': amountInCents,
+        'durationMins': _selectedService!['durationMins'],
         'duration': _selectedService!['duration'],
         'date': formattedDate,
         'timeSlot': _selectedTimeSlot,
-        'time': _selectedTimeSlot, // Dual key for backwards compatibility
-        'status': 'pending', // Lowercase to match OrdersScreen query
+        'referencePhoto': imageUrl,
+        'status': 'pending',
         'paymentStatus': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // 4. INITIALIZE PAYSTACK TRANSACTION VIA BACKEND
       final initResult = await _paymentService.initializePayment(
         email: user.email!,
         amountInCents: amountInCents,
@@ -384,10 +406,8 @@ class _BookingPageState extends State<BookingPage> {
       await bookingRef.update({
         'paymentReference': initResult.reference,
         'paymentStatus': 'initialized',
-        'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      // 5. OPEN PAYSTACK CHECKOUT WEBVIEW
       if (!mounted) return;
       final bool? isPaid = await Navigator.push<bool>(
         context,
@@ -399,147 +419,41 @@ class _BookingPageState extends State<BookingPage> {
         ),
       );
 
-      // 6. VERIFY PAYMENT STATUS
       if (isPaid != true) {
         throw Exception('Payment was cancelled or failed.');
       }
 
-      final PaymentVerification verification =
-      await _paymentService.verifyPayment(
+      final PaymentVerification verification = await _paymentService.verifyPayment(
         reference: initResult.reference,
       );
 
       if (!verification.success || verification.status != 'success') {
-        await bookingRef.update({
-          'status': 'failed',
-          'paymentStatus': verification.status,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        throw Exception('Payment verification was not successful.');
+        await bookingRef.update({'status': 'failed', 'paymentStatus': verification.status});
+        throw Exception('Payment verification failed.');
       }
 
-      // 7. CONFIRM BOOKING
       await bookingRef.update({
         'status': 'confirmed',
         'paymentStatus': 'paid',
         'paymentReference': verification.reference,
         'paidAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      // 8. CREATE CLIENT NOTIFICATION
-      await _firestore.collection('notifications').add({
-        'userId': user.uid,
-        'title': 'Booking Confirmed',
-        'message': 'Your ${_selectedService!['name']} appointment '
-            'on $formattedDate at $_selectedTimeSlot has been confirmed.',
-        'type': 'booking',
-        'bookingId': bookingId,
-        'paymentReference': verification.reference,
-        'read': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      // 9. SHOW SUCCESS RECEIPT & REDIRECT
       if (!mounted) return;
-      _showBookingSuccess(paymentReference: verification.reference);
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const OrdersScreen()),
+      );
     } catch (e) {
-      debugPrint('Booking/payment error: $e');
-
       if (bookingId != null) {
-        try {
-          await _firestore
-              .collection('appointments')
-              .doc(bookingId)
-              .update({
-            'status': 'failed',
-            'paymentStatus': 'failed',
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-        } catch (_) {}
+        await _firestore.collection('appointments').doc(bookingId).update({'status': 'failed'});
       }
-
       _showMessage(e.toString().replaceFirst('Exception: ', ''));
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
-
-  // ============================================================
-  // SUCCESS RECEIPT DIALOG & REDIRECT
-  // ============================================================
-
-  void _showBookingSuccess({
-    required String paymentReference,
-  }) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.green),
-              SizedBox(width: 10),
-              Expanded(child: Text('Payment Successful')),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Your appointment has been confirmed!',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              Text('Service: ${_selectedService!['name']}'),
-              Text('Date: ${_getDateString(_selectedDate!)}'),
-              Text('Time: $_selectedTimeSlot'),
-              Text(
-                  'Amount Paid: R${(_selectedService!['price'] as num).toStringAsFixed(2)}'),
-              const Divider(height: 20),
-              Text('Receipt Ref: $paymentReference',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryPurple,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () {
-                Navigator.pop(context); // Close receipt
-                setState(() {
-                  _selectedService = null;
-                  _selectedDate = null;
-                  _selectedTimeSlot = null;
-                });
-                // Redirect directly to My Bookings screen
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const OrdersScreen()),
-                );
-              },
-              child: const Text('VIEW MY BOOKINGS'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // ============================================================
-  // BUILD UI
-  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -550,34 +464,19 @@ class _BookingPageState extends State<BookingPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF9F7FA),
       appBar: AppBar(
-        title: const Text(
-          'Book an Appointment',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text('Book an Appointment', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
       ),
       body: _isLoading
-          ? const Center(
-        child: CircularProgressIndicator(color: primaryPurple),
-      )
+          ? const Center(child: CircularProgressIndicator(color: primaryPurple))
           : SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // CATEGORY
-            const Text(
-              'Select Category',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            const Text('1. Select Category', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             SizedBox(
               height: 45,
@@ -587,7 +486,6 @@ class _BookingPageState extends State<BookingPage> {
                 itemBuilder: (context, index) {
                   final category = _categories[index];
                   final isSelected = category == _selectedCategory;
-
                   return Padding(
                     padding: const EdgeInsets.only(right: 10),
                     child: ChoiceChip(
@@ -596,15 +494,15 @@ class _BookingPageState extends State<BookingPage> {
                       selectedColor: primaryPurple,
                       backgroundColor: Colors.white,
                       labelStyle: TextStyle(
-                        color: isSelected
-                            ? Colors.white
-                            : Colors.black87,
+                        color: isSelected ? Colors.white : Colors.black87,
                         fontWeight: FontWeight.w600,
                       ),
                       onSelected: (selected) {
                         setState(() {
                           _selectedCategory = category;
                           _selectedService = null;
+                          _selectedTimeSlot = null;
+                          _availableTimeSlots.clear();
                         });
                       },
                     ),
@@ -615,68 +513,37 @@ class _BookingPageState extends State<BookingPage> {
 
             const SizedBox(height: 25),
 
-            // SERVICES
-            const Text(
-              'Select Service',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            const Text('2. Select Service', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             ...filteredServices.map((service) {
-              final isSelected =
-                  _selectedService?['id'] == service['id'];
-
+              final isSelected = _selectedService?['id'] == service['id'];
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
                   color: isSelected ? lightPurple : Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isSelected
-                        ? primaryPurple
-                        : Colors.transparent,
-                    width: 2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  border: Border.all(color: isSelected ? primaryPurple : Colors.transparent, width: 2),
                 ),
                 child: ListTile(
                   onTap: () {
                     setState(() {
                       _selectedService = service;
+                      _selectedTimeSlot = null;
                     });
+                    if (_selectedDate != null) {
+                      _generateAvailableTimeSlots();
+                    }
                   },
                   leading: CircleAvatar(
                     backgroundColor: lightPurple,
-                    child: Icon(
-                      service['icon'] as IconData,
-                      color: primaryPurple,
-                    ),
+                    child: Icon(service['icon'] as IconData, color: primaryPurple),
                   ),
-                  title: Text(
-                    service['name'],
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text(
-                    '${service['description']}\nDuration: ${service['duration']}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  title: Text(service['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('${service['description']}\nDuration: ${service['duration']}'),
                   isThreeLine: true,
                   trailing: Text(
                     'R${(service['price'] as num).toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      color: primaryPurple,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+                    style: const TextStyle(color: primaryPurple, fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                 ),
               );
@@ -684,14 +551,7 @@ class _BookingPageState extends State<BookingPage> {
 
             const SizedBox(height: 20),
 
-            // DATE
-            const Text(
-              'Select Date',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            const Text('3. Select Date', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             InkWell(
               onTap: () async {
@@ -701,34 +561,28 @@ class _BookingPageState extends State<BookingPage> {
                   firstDate: DateTime.now(),
                   lastDate: DateTime.now().add(const Duration(days: 60)),
                 );
-
                 if (picked != null) {
                   setState(() {
                     _selectedDate = picked;
                     _selectedTimeSlot = null;
                   });
+                  if (_selectedService != null) {
+                    _generateAvailableTimeSlots();
+                  }
                 }
               },
               child: Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
                 child: Row(
                   children: [
-                    const Icon(Icons.calendar_today,
-                        color: primaryPurple),
+                    const Icon(Icons.calendar_today, color: primaryPurple),
                     const SizedBox(width: 15),
                     Text(
-                      _selectedDate == null
-                          ? 'Tap to choose appointment date'
-                          : _getDateString(_selectedDate!),
+                      _selectedDate == null ? 'Tap to choose appointment date' : _getDateString(_selectedDate!),
                       style: TextStyle(
                         fontSize: 16,
-                        color: _selectedDate == null
-                            ? Colors.grey
-                            : Colors.black87,
+                        color: _selectedDate == null ? Colors.grey : Colors.black87,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -739,85 +593,198 @@ class _BookingPageState extends State<BookingPage> {
 
             const SizedBox(height: 25),
 
-            // TIME SLOTS
-            const Text(
-              'Select Time Slot',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+            const Text('4. Select Time Slot', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(
+              _selectedDate == null
+                  ? 'Select a date first.'
+                  : (_selectedDate!.weekday == DateTime.saturday || _selectedDate!.weekday == DateTime.sunday)
+                  ? 'Weekend slots (08:00 - 00:00)'
+                  : 'Weekday slots (19:00 & 21:00)',
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
             ),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: _timeSlots.map((slot) {
-                final isSelected = _selectedTimeSlot == slot;
+            if (_selectedService == null || _selectedDate == null)
+              const Text('Please select a service and date to view time slots.', style: TextStyle(color: Colors.grey))
+            else if (_availableTimeSlots.isEmpty)
+              const Text('No available time slots for this date/duration.', style: TextStyle(color: Colors.red))
+            else
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: _availableTimeSlots.map((slot) {
+                  final isSelected = _selectedTimeSlot == slot;
+                  return ChoiceChip(
+                    label: Text(slot),
+                    selected: isSelected,
+                    selectedColor: primaryPurple,
+                    backgroundColor: Colors.white,
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : Colors.black87,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    onSelected: (selected) {
+                      setState(() => _selectedTimeSlot = slot);
+                    },
+                  );
+                }).toList(),
+              ),
 
-                return ChoiceChip(
-                  label: Text(slot),
-                  selected: isSelected,
-                  selectedColor: primaryPurple,
-                  backgroundColor: Colors.white,
-                  labelStyle: TextStyle(
-                    color:
-                    isSelected ? Colors.white : Colors.black87,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  onSelected: (selected) {
-                    setState(() {
-                      _selectedTimeSlot = slot;
-                    });
-                  },
-                );
-              }).toList(),
-            ),
+            const SizedBox(height: 25),
 
-            const SizedBox(height: 35),
-
-            // SUMMARY
-            if (_selectedService != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: lightPurple,
-                  borderRadius: BorderRadius.circular(16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  '5. Reference Photo',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Booking Summary',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                Text(
+                  'Optional',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Upload an inspo photo of the hair or nail set you want.',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 12),
+
+            _referenceImage != null
+                ? Stack(
+              children: [
+                Container(
+                  height: 180,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    image: DecorationImage(
+                      image: FileImage(_referenceImage!),
+                      fit: BoxFit.cover,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                ),
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.4),
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.2),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Text(_selectedService!['name']),
-                    const SizedBox(height: 5),
-                    Text(
-                      'Date: ${_selectedDate == null ? 'Not selected' : _getDateString(_selectedDate!)}',
+                  ),
+                ),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _referenceImage = null;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        size: 18,
+                        color: Colors.red,
+                      ),
                     ),
-                    Text(
-                      'Time: ${_selectedTimeSlot ?? 'Not selected'}',
+                  ),
+                ),
+                Positioned(
+                  bottom: 12,
+                  right: 12,
+                  child: InkWell(
+                    onTap: _pickReferenceImage,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.edit, size: 14, color: Colors.white),
+                          SizedBox(width: 6),
+                          Text(
+                            'Change',
+                            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
                     ),
-                    const Divider(),
-                    Text(
-                      'Total: R${(_selectedService!['price'] as num).toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            )
+                : GestureDetector(
+              onTap: _pickReferenceImage,
+              child: Container(
+                height: 120,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: primaryPurple.withValues(alpha: 0.3), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: const BoxDecoration(
+                        color: lightPurple,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.add_a_photo_outlined,
                         color: primaryPurple,
+                        size: 26,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Tap to attach style reference photo',
+                      style: TextStyle(
+                        color: primaryPurple,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
                       ),
                     ),
                   ],
                 ),
               ),
-
-            const SizedBox(height: 25),
-
+            ),
+            const SizedBox(height: 30),
             SizedBox(
               width: double.infinity,
               height: 55,
@@ -832,21 +799,7 @@ class _BookingPageState extends State<BookingPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryPurple,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            const Center(
-              child: Text(
-                'Secure payment powered by Paystack',
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 12,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
               ),
             ),
