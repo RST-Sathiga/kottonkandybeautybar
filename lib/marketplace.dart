@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -57,6 +58,60 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   final List<Map<String, dynamic>> _cart = [];
   final Set<String> _favourites = {};
+
+  // ============================================================
+  // ADMIN-MANAGED PRODUCTS (live from Firestore)
+  // ============================================================
+
+  List<Map<String, dynamic>>? _remoteItems;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _productsSub;
+
+  IconData _iconFor(String category) {
+    switch (category) {
+      case 'Hair':
+        return Icons.content_cut;
+      case 'Nails':
+        return Icons.brush;
+      case 'Makeup':
+        return Icons.face;
+      case 'Lashes':
+        return Icons.remove_red_eye;
+      case 'Skincare':
+        return Icons.spa;
+      default:
+        return Icons.shopping_bag;
+    }
+  }
+
+  ImageProvider _img(String path) =>
+      path.startsWith('http') ? NetworkImage(path) : AssetImage(path);
+
+  void _listenToProducts() {
+    _productsSub =
+        _firestore.collection('products').snapshots().listen((snap) {
+          // Keep the built-in list until products exist in Firestore.
+          if (snap.docs.isEmpty) return;
+          final items = snap.docs.map((d) {
+            final data = d.data();
+            final category = (data['category'] ?? 'Hair').toString();
+            final url = (data['imageUrl'] ?? '').toString();
+            final asset = (data['image'] ?? '').toString();
+            final image = url.isNotEmpty ? url : (asset.isNotEmpty ? asset : null);
+            return <String, dynamic>{
+              'id': d.id,
+              'name': data['name'] ?? '',
+              'category': category,
+              'description': data['description'] ?? '',
+              'price': (data['price'] as num?) ?? 0,
+              'duration': data['duration'] ?? 'Product',
+              if (data['isProduct'] == true) 'isProduct': true,
+              'icon': _iconFor(category),
+              if (image != null) 'image': image,
+            };
+          }).toList();
+          if (mounted) setState(() => _remoteItems = items);
+        }, onError: (_) {});
+  }
 
   // ============================================================
   // CATEGORIES
@@ -206,11 +261,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   void initState() {
     super.initState();
     _loadUserFavorites();
+    _listenToProducts();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _productsSub?.cancel();
     super.dispose();
   }
 
@@ -253,7 +310,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   List<Map<String, dynamic>> get _filteredServices {
     final String search = _searchController.text.trim().toLowerCase();
 
-    return _sampleServices.where((service) {
+    return (_remoteItems ?? _sampleServices).where((service) {
       final String name = service['name'].toString().toLowerCase();
       final String category = service['category'].toString().toLowerCase();
 
@@ -497,7 +554,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           borderRadius: BorderRadius.circular(20),
                           image: imagePath != null
                               ? DecorationImage(
-                            image: AssetImage(imagePath),
+                            image: _img(imagePath),
                             fit: BoxFit.cover,
                           )
                               : null,
@@ -906,7 +963,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 borderRadius: BorderRadius.circular(16),
                 image: imagePath != null
                     ? DecorationImage(
-                  image: AssetImage(imagePath),
+                  image: _img(imagePath),
                   fit: BoxFit.cover,
                 )
                     : null,

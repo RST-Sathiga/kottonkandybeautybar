@@ -1,46 +1,206 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
-  <base href="$FLUTTER_BASE_HREF">
-
   <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Final Year Project">
-
-  <!-- iOS meta tags & icons -->
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="kottonkandy">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
-
-  <title>kottonkandy</title>
-  <link rel="manifest" href="manifest.json">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kotton Kandy Admin</title>
+  <style>
+    :root{--p:#6B3A82;--pk:#E91E63;--bg:#f6f2f8;--card:#fff;--tx:#222;--mu:#777;--bd:#e8e0ec}
+    @media(prefers-color-scheme:dark){:root{--bg:#121212;--card:#1e1e1e;--tx:#eee;--mu:#999;--bd:#333}}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Poppins,system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+    .hide{display:none!important}
+    #login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+    .box{background:var(--card);padding:32px;border-radius:18px;width:100%;max-width:380px;box-shadow:0 8px 30px #0001}
+    h1{margin:0 0 4px;color:var(--p);font-size:24px}
+    .sub{color:var(--mu);margin:0 0 20px;font-size:14px}
+    input,select{width:100%;padding:12px 14px;border:1px solid var(--bd);border-radius:12px;margin-bottom:12px;font:inherit;background:var(--bg);color:var(--tx)}
+    button{background:var(--pk);color:#fff;border:0;border-radius:12px;padding:11px 18px;font:inherit;font-weight:600;cursor:pointer}
+    button.sec{background:var(--p)}button.del{background:#d32f2f;padding:6px 12px;font-size:13px}
+    button.full{width:100%}
+    .err{color:#d32f2f;font-size:13px;min-height:18px;margin-top:8px}
+    #app{display:flex;min-height:100vh}
+    nav{width:220px;background:var(--p);color:#fff;padding:20px 12px;display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+    nav h2{margin:0 8px 18px;font-size:18px}
+    nav a{padding:11px 14px;border-radius:10px;cursor:pointer;color:#fff;opacity:.85}
+    nav a.on,nav a:hover{background:#ffffff26;opacity:1}
+    nav .out{margin-top:auto}
+    main{flex:1;padding:26px;overflow-x:auto;min-width:0}
+    h3{margin:0 0 18px;font-size:22px}
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:22px}
+    .stat{background:var(--card);padding:18px;border-radius:14px;border-left:4px solid var(--pk)}
+    .stat b{display:block;font-size:26px;color:var(--p)}.stat span{color:var(--mu);font-size:13px}
+    .card{background:var(--card);border-radius:14px;padding:16px;overflow-x:auto;margin-bottom:18px}
+    table{width:100%;border-collapse:collapse;font-size:14px}
+    th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}
+    th{color:var(--mu);font-weight:600;font-size:12px;text-transform:uppercase}
+    td select{margin:0;padding:6px;width:auto}
+    img.th{width:40px;height:40px;border-radius:8px;object-fit:cover}
+    .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+    .empty{color:var(--mu);padding:20px;text-align:center}
+    @media(max-width:700px){#app{flex-direction:column}nav{width:100%;flex-direction:row;flex-wrap:wrap;padding:10px}nav h2{width:100%;margin:0 4px 6px}nav .out{margin:0 0 0 auto}}
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
-  <script src="flutter_bootstrap.js" async></script>
+<div id="login">
+  <div class="box">
+    <h1>Kotton Kandy</h1>
+    <p class="sub">Admin portal – sign in to continue</p>
+    <input id="em" type="email" placeholder="Admin email">
+    <input id="pw" type="password" placeholder="Password">
+    <button class="full" id="loginBtn">SIGN IN</button>
+    <div class="err" id="err"></div>
+  </div>
+</div>
+
+<div id="app" class="hide">
+  <nav>
+    <h2>💜 Kotton Kandy</h2>
+    <a data-t="dash" class="on">Dashboard</a>
+    <a data-t="bookings">Bookings</a>
+    <a data-t="users">Users</a>
+    <a data-t="products">Products</a>
+    <a class="out" id="logout">Sign out</a>
+  </nav>
+  <main>
+    <section id="dash">
+      <h3>Dashboard</h3>
+      <div class="stats" id="stats"></div>
+      <div class="card"><b>Latest bookings</b><div id="latest"></div></div>
+    </section>
+    <section id="bookings" class="hide">
+      <h3>Bookings</h3>
+      <div class="card" id="bookTable"></div>
+    </section>
+    <section id="users" class="hide">
+      <h3>Users</h3>
+      <div class="card" id="userTable"></div>
+    </section>
+    <section id="products" class="hide">
+      <h3>Marketplace products</h3>
+      <div class="card">
+        <div class="row">
+          <input id="pn" placeholder="Name">
+          <input id="pp" type="number" placeholder="Price (R)">
+          <input id="pi" placeholder="Image URL">
+          <input id="pd" placeholder="Description">
+        </div>
+        <button class="sec" id="addProd">Add product</button>
+      </div>
+      <div class="card" id="prodTable"></div>
+    </section>
+  </main>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+  // ---- CONFIG: collection names. Change these to match your app's Firestore ----
+  const COL = { bookings: 'bookings', users: 'users', products: 'products', admins: 'admins' };
+  const STATUSES = ['pending', 'confirmed', 'completed', 'cancelled'];
+
+  firebase.initializeApp({
+    apiKey: 'AIzaSyDMYIUD3vMTyuBhgIzwh-CQGh0Bi8jy_ug',
+    authDomain: 'kotton-kandy.firebaseapp.com',
+    projectId: 'kotton-kandy',
+    storageBucket: 'kotton-kandy.firebasestorage.app',
+    messagingSenderId: '62972437754',
+    appId: '1:62972437754:web:3ee50a514d05c385bf5543'
+  });
+  const auth = firebase.auth(), db = firebase.firestore();
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let unsubs = [], bookings = [], users = [], products = [];
+
+  // ---- Auth ----
+  $('loginBtn').onclick = async () => {
+    $('err').textContent = '';
+    try { await auth.signInWithEmailAndPassword($('em').value.trim(), $('pw').value); }
+    catch (e) { $('err').textContent = 'Login failed: ' + e.message; }
+  };
+  $('pw').onkeydown = e => { if (e.key === 'Enter') $('loginBtn').click(); };
+  $('logout').onclick = () => auth.signOut();
+
+  auth.onAuthStateChanged(async user => {
+    unsubs.forEach(u => u()); unsubs = [];
+    if (!user) { $('app').classList.add('hide'); $('login').classList.remove('hide'); return; }
+    try {
+      const a = await db.collection(COL.admins).doc(user.uid).get();
+      if (!a.exists) {
+        await auth.signOut();
+        $('err').textContent = 'This account is not an admin.';
+        return;
+      }
+    } catch (e) { await auth.signOut(); $('err').textContent = 'Access check failed: ' + e.message; return; }
+    $('login').classList.add('hide'); $('app').classList.remove('hide');
+    listen();
+  });
+
+  // ---- Navigation ----
+  document.querySelectorAll('nav a[data-t]').forEach(a => a.onclick = () => {
+    document.querySelectorAll('nav a').forEach(x => x.classList.remove('on'));
+    a.classList.add('on');
+    document.querySelectorAll('main section').forEach(s => s.classList.add('hide'));
+    $(a.dataset.t).classList.remove('hide');
+  });
+
+  // ---- Live data ----
+  function listen() {
+    unsubs.push(db.collection(COL.bookings).onSnapshot(s => { bookings = s.docs.map(d => ({ id: d.id, ...d.data() })); render(); }, e => console.error(e)));
+    unsubs.push(db.collection(COL.users).onSnapshot(s => { users = s.docs.map(d => ({ id: d.id, ...d.data() })); render(); }, e => console.error(e)));
+    unsubs.push(db.collection(COL.products).onSnapshot(s => { products = s.docs.map(d => ({ id: d.id, ...d.data() })); render(); }, e => console.error(e)));
+  }
+
+  const bDate = b => b.date?.toDate ? b.date.toDate().toLocaleDateString() : (b.date || '');
+  const bName = b => b.serviceName || b.service || b.name || '—';
+  const bWho = b => b.userEmail || b.email || b.userName || b.userId || '—';
+  const bPrice = b => b.price ?? b.amount ?? 0;
+  const bStatus = b => (b.status || 'pending').toLowerCase();
+  const table = (heads, rows) => rows.length
+    ? `<table><thead><tr>${heads.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`
+    : '<div class="empty">Nothing here yet.</div>';
+
+  function render() {
+    const revenue = bookings.filter(b => ['confirmed', 'completed'].includes(bStatus(b))).reduce((s, b) => s + Number(bPrice(b)), 0);
+    $('stats').innerHTML = [
+      [bookings.length, 'Total bookings'],
+      [bookings.filter(b => bStatus(b) === 'pending').length, 'Pending'],
+      ['R' + revenue.toFixed(2), 'Revenue (confirmed + completed)'],
+      [users.length, 'Users'],
+      [products.length, 'Products']
+    ].map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
+
+    const sorted = [...bookings].sort((a, b) => String(bDate(b)).localeCompare(String(bDate(a))));
+    $('latest').innerHTML = table(['Service', 'Client', 'Date', 'Time', 'Status'],
+      sorted.slice(0, 5).map(b => `<tr><td>${esc(bName(b))}</td><td>${esc(bWho(b))}</td><td>${esc(bDate(b))}</td><td>${esc(b.time)}</td><td>${esc(bStatus(b))}</td></tr>`));
+
+    $('bookTable').innerHTML = table(['Service', 'Client', 'Date', 'Time', 'Price', 'Paid', 'Status', ''],
+      sorted.map(b => `<tr><td>${esc(bName(b))}</td><td>${esc(bWho(b))}</td><td>${esc(bDate(b))}</td><td>${esc(b.time)}</td>
+        <td>R${esc(bPrice(b))}</td><td>${esc(b.paymentStatus || b.paid || '—')}</td>
+        <td><select onchange="setStatus('${b.id}',this.value)">${STATUSES.map(s => `<option ${s === bStatus(b) ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
+        <td><button class="del" onclick="delDoc('${COL.bookings}','${b.id}')">Delete</button></td></tr>`));
+
+    $('userTable').innerHTML = table(['Name', 'Email', 'Phone', 'Points'],
+      users.map(u => `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(u.phone)}</td><td>${esc(u.points ?? u.loyaltyPoints ?? 0)}</td></tr>`));
+
+    $('prodTable').innerHTML = table(['', 'Name', 'Price', 'Description', ''],
+      products.map(p => `<tr><td>${p.imageUrl ? `<img class="th" src="${esc(p.imageUrl)}">` : ''}</td><td>${esc(p.name)}</td><td>R${esc(p.price)}</td><td>${esc(p.description)}</td>
+        <td><button class="del" onclick="delDoc('${COL.products}','${p.id}')">Delete</button></td></tr>`));
+  }
+
+  window.setStatus = (id, status) => db.collection(COL.bookings).doc(id).update({ status }).catch(e => alert(e.message));
+  window.delDoc = (col, id) => { if (confirm('Delete this item permanently?')) db.collection(col).doc(id).delete().catch(e => alert(e.message)); };
+
+  $('addProd').onclick = async () => {
+    const name = $('pn').value.trim(), price = parseFloat($('pp').value);
+    if (!name || isNaN(price)) return alert('Name and a valid price are required.');
+    try {
+      await db.collection(COL.products).add({ name, price, imageUrl: $('pi').value.trim(), description: $('pd').value.trim(), createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      ['pn', 'pp', 'pi', 'pd'].forEach(i => $(i).value = '');
+    } catch (e) { alert(e.message); }
+  };
+</script>
 </body>
 </html>
