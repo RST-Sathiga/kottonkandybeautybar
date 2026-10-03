@@ -1,13 +1,4 @@
-// ============================================================
-// CLIENT CHAT SYSTEM — single-file version
-//
-// Everything the CLIENT side of the marketplace app needs for
-// real-time chat with the salon, combined into one file:
-//
-//   1. Data models   (ChatMessage, ChatSummary)
-//   2. Chat service  (all Firestore reads/writes)
-//   3. ChatScreen    (the chat UI for the "Messages" tab)
-// ============================================================
+
 
 import 'dart:io';
 import 'dart:convert';
@@ -18,9 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 
-// ============================================================
-// SENDER TYPE
-// ============================================================
+
 
 enum SenderType { client, salon }
 
@@ -32,9 +21,7 @@ String senderTypeToString(SenderType type) {
   return type == SenderType.salon ? 'salon' : 'client';
 }
 
-// ============================================================
-// CHAT MESSAGE
-// ============================================================
+
 
 class ChatMessage {
   final String id;
@@ -119,9 +106,7 @@ class ChatSummary {
   }
 }
 
-// ============================================================
-// CHAT SERVICE
-// ============================================================
+
 
 class ChatService {
   ChatService._internal();

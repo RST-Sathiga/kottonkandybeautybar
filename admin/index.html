@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Kotton Kandy Admin</title>
+    <style>
+        :root{--p:#6B3A82;--pk:#E91E63;--bg:#f6f2f8;--card:#fff;--tx:#222;--mu:#777;--bd:#e8e0ec}
+        @media(prefers-color-scheme:dark){:root{--bg:#121212;--card:#1e1e1e;--tx:#eee;--mu:#999;--bd:#333}}
+        *{box-sizing:border-box}
+        body{margin:0;font-family:Poppins,system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+        .hide{display:none!important}
+        #login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+        .box{background:var(--card);padding:32px;border-radius:18px;width:100%;max-width:380px;box-shadow:0 8px 30px #0001}
+        h1{margin:0 0 4px;color:var(--p);font-size:24px}
+        .sub{color:var(--mu);margin:0 0 20px;font-size:14px}
+        input,select{width:100%;padding:12px 14px;border:1px solid var(--bd);border-radius:12px;margin-bottom:12px;font:inherit;background:var(--bg);color:var(--tx)}
+        button{background:var(--pk);color:#fff;border:0;border-radius:12px;padding:11px 18px;font:inherit;font-weight:600;cursor:pointer}
+        button.sec{background:var(--p)}button.del{background:#d32f2f;padding:6px 12px;font-size:13px}
+        button.full{width:100%}
+        .err{color:#d32f2f;font-size:13px;min-height:18px;margin-top:8px}
+        #app{display:flex;min-height:100vh}
+        nav{width:220px;background:var(--p);color:#fff;padding:20px 12px;display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+        nav h2{margin:0 8px 18px;font-size:18px}
+        nav a{padding:11px 14px;border-radius:10px;cursor:pointer;color:#fff;opacity:.85}
+        nav a.on,nav a:hover{background:#ffffff26;opacity:1}
+        nav .out{margin-top:auto}
+        main{flex:1;padding:26px;overflow-x:auto;min-width:0}
+        h3{margin:0 0 18px;font-size:22px}
+        .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:22px}
+        .stat{background:var(--card);padding:18px;border-radius:14px;border-left:4px solid var(--pk)}
+        .stat b{display:block;font-size:26px;color:var(--p)}.stat span{color:var(--mu);font-size:13px}
+        .card{background:var(--card);border-radius:14px;padding:16px;overflow-x:auto;margin-bottom:18px}
+        table{width:100%;border-collapse:collapse;font-size:14px}
+        th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}
+        th{color:var(--mu);font-weight:600;font-size:12px;text-transform:uppercase}
+        td select{margin:0;padding:6px;width:auto}
+        img.th{width:40px;height:40px;border-radius:8px;object-fit:cover}
+        .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+        .empty{color:var(--mu);padding:20px;text-align:center}
+        .chat{display:grid;grid-template-columns:270px 1fr;gap:14px;height:72vh}
+        .clist,.cview{background:var(--card);border-radius:14px;overflow:auto}
+        .cview{display:flex;flex-direction:column}
+        .ci{padding:12px 14px;border-bottom:1px solid var(--bd);cursor:pointer}
+        .ci.on,.ci:hover{background:var(--bg)}.ci small{color:var(--mu);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        #chead{padding:14px;font-weight:600;border-bottom:1px solid var(--bd)}
+        #msgs{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px}
+        .m{max-width:70%;padding:9px 13px;border-radius:14px;background:var(--bg);word-wrap:break-word}
+        .m.me{align-self:flex-end;background:var(--p);color:#fff}
+        .send{display:flex;gap:8px;padding:10px;border-top:1px solid var(--bd)}.send input{margin:0}
+        .badge{background:var(--pk);color:#fff;border-radius:10px;padding:1px 8px;font-size:12px;margin-left:6px}
+        @media(max-width:700px){#app{flex-direction:column}nav{width:100%;flex-direction:row;flex-wrap:wrap;padding:10px}nav h2{width:100%;margin:0 4px 6px}nav .out{margin:0 0 0 auto}.chat{grid-template-columns:1fr;height:auto}.clist{max-height:200px}.cview{height:60vh}}
+    </style>
+</head>
+<body>
+
+<div id="login">
+    <div class="box">
+        <h1>Kotton Kandy</h1>
+        <p class="sub">Admin portal – sign in to continue</p>
+        <input id="em" type="email" placeholder="Admin email">
+        <input id="pw" type="password" placeholder="Password">
+        <button class="full" id="loginBtn">SIGN IN</button>
+        <div class="err" id="err"></div>
+    </div>
+</div>
+
+<div id="app" class="hide">
+    <nav>
+        <h2>💜 Kotton Kandy</h2>
+        <a data-t="dash" class="on">Dashboard</a>
+        <a data-t="bookings">Bookings</a>
+        <a data-t="messages">Messages</a>
+        <a data-t="users">Users</a>
+        <a data-t="products">Products</a>
+        <a class="out" id="logout">Sign out</a>
+    </nav>
+    <main>
+        <section id="dash">
+            <h3>Dashboard</h3>
+            <div class="stats" id="stats"></div>
+            <div class="card"><b>Latest bookings</b><div id="latest"></div></div>
+        </section>
+        <section id="bookings" class="hide">
+            <h3>Bookings</h3>
+            <div class="card" id="bookTable"></div>
+        </section>
+        <section id="messages" class="hide">
+            <h3>Messages</h3>
+            <div class="chat">
+                <div class="clist" id="clist"></div>
+                <div class="cview">
+                    <div id="chead">Select a conversation</div>
+                    <div id="msgs"></div>
+                    <div class="send">
+                        <input id="ci" placeholder="Type a reply…">
+                        <button id="sendBtn">Send</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <section id="users" class="hide">
+            <h3>Users</h3>
+            <div class="card" id="userTable"></div>
+        </section>
+        <section id="products" class="hide">
+            <h3>Products &amp; services</h3>
+            <div class="card">
+                <div class="row">
+                    <input id="pn" placeholder="Name">
+                    <input id="pp" type="number" placeholder="Price (R)">
+                    <select id="pc"><option>Hair</option><option>Nails</option><option>Makeup</option><option>Lashes</option><option>Skincare</option></select>
+                    <select id="pt"><option value="product">Product</option><option value="service">Service</option></select>
+                    <input id="pdu" placeholder="Duration (services only)">
+                    <input id="pi" placeholder="Image URL">
+                    <input id="pd" placeholder="Description">
+                </div>
+                <button class="sec" id="addProd">Add</button>
+                <button id="seedBtn" style="margin-left:8px">Import the app's current items</button>
+            </div>
+            <div class="card" id="prodTable"></div>
+        </section>
+    </main>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+    const COL = { bookings: 'appointments', users: 'users', products: 'products', admins: 'admins', chats: 'chats', notifications: 'notifications' };
+
+    firebase.initializeApp({
+      apiKey: 'AIzaSyDMYIUD3vMTyuBhgIzwh-CQGh0Bi8jy_ug',
+      authDomain: 'kotton-kandy.firebaseapp.com',
+      projectId: 'kotton-kandy',
+      storageBucket: 'kotton-kandy.firebasestorage.app',
+      messagingSenderId: '62972437754',
+      appId: '1:62972437754:web:3ee50a514d05c385bf5543'
+    });
+    const auth = firebase.auth(), db = firebase.firestore(), FV = firebase.firestore.FieldValue;
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    let unsubs = [], msgUnsub = null, bookings = [], users = [], products = [], chats = [], msgs = [], activeChat = null;
+
+    // ---- Auth ----
+    $('loginBtn').onclick = async () => {
+      $('err').textContent = '';
+      try { await auth.signInWithEmailAndPassword($('em').value.trim(), $('pw').value); }
+      catch (e) { $('err').textContent = 'Login failed: ' + e.message; }
+    };
+    $('pw').onkeydown = e => { if (e.key === 'Enter') $('loginBtn').click(); };
+    $('logout').onclick = () => auth.signOut();
+
+    auth.onAuthStateChanged(async user => {
+      unsubs.forEach(u => u()); unsubs = [];
+      if (msgUnsub) { msgUnsub(); msgUnsub = null; }
+      if (!user) { $('app').classList.add('hide'); $('login').classList.remove('hide'); return; }
+      try {
+        const a = await db.collection(COL.admins).doc(user.uid).get();
+        if (!a.exists) { await auth.signOut(); $('err').textContent = 'This account is not an admin.'; return; }
+      } catch (e) { await auth.signOut(); $('err').textContent = 'Access check failed: ' + e.message; return; }
+      $('login').classList.add('hide'); $('app').classList.remove('hide');
+      listen();
+    });
+
+    // ---- Navigation ----
+    document.querySelectorAll('nav a[data-t]').forEach(a => a.onclick = () => {
+      document.querySelectorAll('nav a').forEach(x => x.classList.remove('on'));
+      a.classList.add('on');
+      document.querySelectorAll('main section').forEach(s => s.classList.add('hide'));
+      $(a.dataset.t).classList.remove('hide');
+    });
+
+    // ---- Live data ----
+    const watch = (col, set) => unsubs.push(db.collection(col).onSnapshot(
+      s => { set(s.docs.map(d => ({ id: d.id, ...d.data() }))); render(); }, e => console.error(col, e)));
+    function listen() {
+      watch(COL.bookings, d => bookings = d);
+      watch(COL.users, d => users = d);
+      watch(COL.products, d => products = d);
+      watch(COL.chats, d => chats = d);
+    }
+
+    // ---- Helpers (match the app's field names) ----
+    const ALL_STATUS = ['pending', 'confirmed', 'paid', 'completed', 'cancelled', 'failed'];
+    const ts = x => x?.toMillis ? x.toMillis() : (x ? new Date(x).getTime() || 0 : 0);
+    const uName = id => { const u = users.find(x => x.id === id); return u ? (u.name || u.email || id) : (id || '—'); };
+    const bDate = b => b.date?.toDate ? b.date.toDate().toLocaleDateString() : (b.date || '');
+    const bTime = b => b.timeSlot || b.time || (b.date?.toDate ? b.date.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
+    const bName = b => b.serviceName || b.service || b.name || '—';
+    const bWho = b => b.userEmail || b.email || uName(b.userId);
+    const bPrice = b => b.price ?? b.amount ?? 0;
+    const bStatus = b => (b.status || 'pending').toLowerCase();
+    const table = (heads, rows) => rows.length
+      ? `<table><thead><tr>${heads.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`
+      : '<div class="empty">Nothing here yet.</div>';
+
+    function render() {
+      const sorted = [...bookings].sort((a, b) => ts(b.createdAt) - ts(a.createdAt));
+      const paid = bookings.filter(b => b.paymentStatus === 'paid' && bStatus(b) !== 'cancelled').reduce((s, b) => s + Number(bPrice(b)), 0);
+      const unread = chats.reduce((s, c) => s + (c.unreadForSalon || 0), 0);
+      $('stats').innerHTML = [
+        [bookings.length, 'Total bookings'],
+        [bookings.filter(b => bStatus(b) === 'pending').length, 'Pending'],
+        ['R' + paid.toFixed(2), 'Paid bookings'],
+        [unread, 'Unread messages'],
+        [users.length, 'Users'],
+        [products.length, 'Products & services']
+      ].map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
+
+      $('latest').innerHTML = table(['Service', 'Client', 'Date', 'Time', 'Status'],
+        sorted.slice(0, 5).map(b => `<tr><td>${esc(bName(b))}</td><td>${esc(bWho(b))}</td><td>${esc(bDate(b))}</td><td>${esc(bTime(b))}</td><td>${esc(bStatus(b))}</td></tr>`));
+
+      $('bookTable').innerHTML = table(['Service', 'Client', 'Date', 'Time', 'Price', 'Payment', 'Photo', 'Status', ''],
+        sorted.map(b => {
+          const opts = ALL_STATUS.includes(bStatus(b)) ? ALL_STATUS : [...ALL_STATUS, bStatus(b)];
+          return `<tr><td>${esc(bName(b))}</td><td>${esc(bWho(b))}</td><td>${esc(bDate(b))}</td><td>${esc(bTime(b))}</td>
+          <td>R${esc(bPrice(b))}</td><td>${esc(b.paymentStatus || '—')}</td>
+          <td>${b.referencePhoto ? `<a href="${esc(b.referencePhoto)}" target="_blank">View</a>` : '—'}</td>
+          <td><select onchange="setStatus('${b.id}',this.value)">${opts.map(s => `<option ${s === bStatus(b) ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
+          <td><button class="del" onclick="delDoc('${COL.bookings}','${b.id}')">Delete</button></td></tr>`;
+        }));
+
+      $('userTable').innerHTML = table(['Name', 'Email', 'Phone', 'Points'],
+        users.map(u => `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(u.phone)}</td><td>${esc(u.points ?? u.loyaltyPoints ?? 0)}</td></tr>`));
+
+      $('prodTable').innerHTML = table(['', 'Name', 'Type', 'Category', 'Price', 'Description', ''],
+        products.map(p => `<tr><td>${p.imageUrl ? `<img class="th" src="${esc(p.imageUrl)}">` : ''}</td><td>${esc(p.name)}</td>
+          <td>${p.isProduct ? 'Product' : 'Service'}</td><td>${esc(p.category)}</td><td>R${esc(p.price)}</td><td>${esc(p.description)}</td>
+          <td><button class="del" onclick="delDoc('${COL.products}','${p.id}')">Delete</button></td></tr>`));
+
+      const cs = [...chats].sort((a, b) => ts(b.lastMessageTime) - ts(a.lastMessageTime));
+      $('clist').innerHTML = cs.length ? cs.map(c => `<div class="ci ${c.id === activeChat ? 'on' : ''}" onclick="openChat('${c.id}')">
+          <b>${esc(c.clientName || uName(c.clientId))}</b>${c.unreadForSalon ? `<span class="badge">${c.unreadForSalon}</span>` : ''}
+          <small>${esc(c.lastMessage || '')}</small></div>`).join('')
+        : '<div class="empty">No conversations yet.</div>';
+      const ac = chats.find(c => c.id === activeChat);
+      if (ac) $('chead').textContent = ac.clientName || uName(ac.clientId);
+    }
+
+    // ---- Chat ----
+    async function markRead(id, list) {
+      const unread = list.filter(m => m.senderType === 'client' && !m.read);
+      const c = chats.find(x => x.id === id);
+      if (!unread.length && !(c && c.unreadForSalon)) return;
+      const ref = db.collection(COL.chats).doc(id), b = db.batch();
+      unread.forEach(m => b.update(ref.collection('messages').doc(m.id), { read: true }));
+      b.update(ref, { unreadForSalon: 0 });
+      b.commit().catch(console.error);
+    }
+    window.openChat = id => {
+      activeChat = id; $('msgs').innerHTML = ''; render();
+      if (msgUnsub) msgUnsub();
+      msgUnsub = db.collection(COL.chats).doc(id).collection('messages').onSnapshot(s => {
+        msgs = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => ts(a.timestamp) - ts(b.timestamp));
+        $('msgs').innerHTML = msgs.map(m => `<div class="m ${m.senderType === 'salon' ? 'me' : ''}">
+          ${m.imageUrl ? `<img src="${esc(m.imageUrl)}" style="max-width:100%;border-radius:8px;display:block;margin-bottom:4px">` : ''}${esc(m.text)}</div>`).join('');
+        $('msgs').scrollTop = $('msgs').scrollHeight;
+        markRead(id, msgs);
+      }, e => alert('Could not load messages: ' + e.message));
+    };
+    async function sendReply() {
+      const text = $('ci').value.trim();
+      if (!text || !activeChat) return;
+      $('ci').value = '';
+      try {
+        const ref = db.collection(COL.chats).doc(activeChat), now = FV.serverTimestamp(), b = db.batch();
+        b.set(ref.collection('messages').doc(), { senderId: auth.currentUser.uid, senderType: 'salon', text, timestamp: now, read: false });
+        b.update(ref, { lastMessage: text, lastMessageTime: now, lastMessageSenderType: 'salon', unreadForClient: FV.increment(1) });
+        await b.commit();
+      } catch (e) { alert('Send failed: ' + e.message); }
+    }
+    $('sendBtn').onclick = sendReply;
+    $('ci').onkeydown = e => { if (e.key === 'Enter') sendReply(); };
+
+    // ---- Bookings: change status and notify the client ----
+    window.setStatus = async (id, status) => {
+      try {
+        await db.collection(COL.bookings).doc(id).update({ status });
+        const b = bookings.find(x => x.id === id);
+        if (b && b.userId) {
+          const msg = `Your ${bName(b)} booking is now ${status}.`;
+          await db.collection(COL.notifications).add({ userId: b.userId, title: 'Booking ' + status, message: msg, body: msg, read: false, createdAt: FV.serverTimestamp() });
+        }
+      } catch (e) { alert(e.message); }
+    };
+    window.delDoc = (col, id) => { if (confirm('Delete this item permanently?')) db.collection(col).doc(id).delete().catch(e => alert(e.message)); };
+
+    // ---- Products & services ----
+    $('addProd').onclick = async () => {
+      const name = $('pn').value.trim(), price = parseFloat($('pp').value), isProduct = $('pt').value === 'product';
+      if (!name || isNaN(price)) return alert('Name and a valid price are required.');
+      try {
+        await db.collection(COL.products).add({
+          name, price, category: $('pc').value, isProduct, imageUrl: $('pi').value.trim(),
+          description: $('pd').value.trim(), duration: isProduct ? 'Product' : ($('pdu').value.trim() || '1 hr'), createdAt: FV.serverTimestamp()
+        });
+        ['pn', 'pp', 'pi', 'pd', 'pdu'].forEach(i => $(i).value = '');
+      } catch (e) { alert(e.message); }
+    };
+
+    // [id, name, category, price, description, duration, asset image]
+    const SEED = [
+      ['hair_braiding', 'Hair Braiding', 'Hair', 350, 'Professional braiding and protective hairstyles.', '2 hrs'],
+      ['gel_nails', 'Gel Nails', 'Nails', 250, 'Beautiful long-lasting gel nail application.', '1 hr 30 min'],
+      ['makeup', 'Professional Makeup', 'Makeup', 450, 'Professional makeup for events and special occasions.', '1 hr 30 min'],
+      ['lashes', 'Lash Extensions', 'Lashes', 300, 'Enhance your look with beautiful lash extensions.', '1 hr'],
+      ['facial', 'Luxury Facial', 'Skincare', 400, 'Relaxing facial treatment for healthy glowing skin.', '1 hr'],
+      ['hair_wash', 'Hair Wash & Treatment', 'Hair', 220, 'Deep cleansing and nourishing hair treatment.', '1 hr'],
+      ['aki_shampoo', 'Aki Asili Clarifying Shampoo', 'Hair', 150, 'Deep cleansing shampoo formulated to eliminate build-up.', 'Product', 'assets/images/shampoo.jpeg'],
+      ['hair_spray', 'Aki Asili Hair Spray', 'Hair', 90, 'Lightweight hold spray to lock in styles and reduce frizz.', 'Product', 'assets/images/hair_spary.jpeg'],
+      ['creamy_hair_food', 'Aki Asili Creamy Hair Food', 'Hair', 120, 'Nourishing formula that seals in moisture and adds shine.', 'Product', 'assets/images/creamy_hair_food.jpeg'],
+      ['protein_conditioner', 'Aki Asili Protein Conditioner', 'Hair', 180, 'Restorative treatment to strengthen and repair damaged hair.', 'Product', 'assets/images/protien_conditioner.jpeg'],
+      ['french_tip_nails', 'Classic French Tip Press-Ons', 'Nails', 150, 'Elegant and timeless French tip press-on nails with adhesive.', 'Product', 'assets/images/nails.jpeg'],
+      ['matte_nude_nails', 'Matte Nude Press-On Nails', 'Nails', 130, 'Sophisticated matte nude finish for everyday wear.', 'Product', 'assets/images/matte_nails.jpeg']
+    ];
+    $('seedBtn').onclick = async () => {
+      if (!confirm('Copy the ' + SEED.length + ' items currently built into the app into Firestore?')) return;
+      try {
+        const b = db.batch();
+        SEED.forEach(([id, name, category, price, description, duration, image]) =>
+          b.set(db.collection(COL.products).doc(id), { name, category, price, description, duration, isProduct: duration === 'Product', image: image || '', imageUrl: '', createdAt: FV.serverTimestamp() }, { merge: true }));
+        await b.commit();
+      } catch (e) { alert(e.message); }
+    };
+</script>
+</body>
+</html>
