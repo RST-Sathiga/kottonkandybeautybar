@@ -12,8 +12,14 @@ import 'favorites_page.dart';
 import 'main.dart';
 import 'payment_service.dart';
 import 'paystack_checkout_screen.dart';
+import 'simulated_payment.dart';
+import 'credit_helper.dart';
 import 'kiosk_picker_dialog.dart';
 import 'booking_page.dart';
+import 'refunds.dart';
+import 'package:provider/provider.dart';
+import 'notifications_screen.dart';
+import 'notification_prefs_service.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
@@ -376,6 +382,31 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // SHOW MESSAGE
   // ============================================================
 
+  /// +25 loyalty points for a purchase. The Firestore rules check that the order
+  /// is yours and brand new, and each order can only be claimed once.
+  Future<void> _awardPurchasePoints(String orderId) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+      final userRef = _firestore.collection('users').doc(user.uid);
+      final claimId = 'order_$orderId';
+      final batch = _firestore.batch();
+      batch.set(userRef.collection('claims').doc(claimId), {
+        'type': 'order',
+        'refId': orderId,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      batch.update(userRef, {
+        'points': FieldValue.increment(25),
+        'lastClaimId': claimId,
+      });
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Purchase points failed: $e');
+      // Points are a bonus. Never block or fail a checkout because of them.
+    }
+  }
+
   void _showMessage(String message, {bool isError = true}) {
     if (!mounted) return;
 
@@ -425,6 +456,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     );
 
     if (confirmed != true) return;
+
+    try {
+      await NotificationPrefsService().unregisterToken();
+    } catch (_) {}
 
     await _auth.signOut();
     if (!mounted) return;
@@ -740,12 +775,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               ],
             ),
             actions: [
-              _buildIconButton(
-                icon: Icons.notifications_none,
-                onTap: () {
-                  _showMessage('No new notifications.', isError: false);
-                },
-              ),
+              const NotificationBell(),
               _buildCartButton(),
               const SizedBox(width: 10),
             ],
@@ -1505,6 +1535,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     // STEP 2: LAUNCH PAYSTACK
     final double grandTotal = _cartTotal + (selectedShipping['price'] as double);
 
+    // Loyalty credit: ask if the client wants to use it on this order.
+    final double creditUsed = await CreditHelper.askToUseCredit(context, total: grandTotal);
+    if (!mounted) return;
+    final double payable = grandTotal - creditUsed;
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1513,10 +1548,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       ),
     );
 
+    bool spinnerOpen = true;
+
     try {
       final paymentService = PaymentService();
       final orderId = 'ORD_${DateTime.now().millisecondsSinceEpoch}';
-      final amountInCents = (grandTotal * 100).toInt();
+      final amountInCents = (payable * 100).round();
 
       final initResult = await paymentService.initializePayment(
         email: user.email!,
@@ -1525,20 +1562,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         serviceName: 'Marketplace Order (${_cart.length} items)',
       );
 
-      if (mounted) Navigator.pop(context); // Dismiss loading spinner
+      if (mounted) Navigator.of(context, rootNavigator: true).pop(); // Dismiss loading spinner
+      spinnerOpen = false;
 
       if (mounted) {
-        final bool? isPaid = await Navigator.push<bool>(
+        final bool? isPaid = await payWithSimulatedStepThenPaystack(
           context,
-          MaterialPageRoute(
-            builder: (context) => PaystackCheckoutScreen(
-              authorizationUrl: initResult.authorizationUrl,
-              reference: initResult.reference,
-            ),
-          ),
+          amountInCents: amountInCents,
+          authorizationUrl: initResult.authorizationUrl,
+          reference: initResult.reference,
         );
 
         if (isPaid == true && mounted) {
+          spinnerOpen = true;
           showDialog(
             context: context,
             barrierDismissible: false,
@@ -1554,6 +1590,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           if (mounted) {
             Navigator.of(context, rootNavigator: true).pop();
           }
+          spinnerOpen = false;
 
           if (verification.success && mounted) {
             final summary = _cart.map((i) => i['name'] ?? 'Product').join(', ');
@@ -1563,77 +1600,100 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
             final currentOrderId = DateTime.now().millisecondsSinceEpoch.toString();
 
-            await _firestore.collection('orders').doc(currentOrderId).set({
-              'orderId': currentOrderId,
-              'userId': user.uid,
-              'userEmail': user.email,
-              'serviceName': summary.isEmpty ? 'Marketplace Order' : summary,
-              'items': List.from(_cart),
-              'totalAmount': grandTotal,
-              'price': grandTotal,
-              'shippingMethod': selectedShipping['title'] ?? 'Standard Delivery',
-              'deliveryMethod': selectedShipping['title'] ?? 'Standard Delivery',
-              'shippingAddress': addressDetails,
-              'deliveryAddress': addressDetails,
-              'status': 'confirmed',
-              'paymentStatus': 'paid',
-              'paymentReference': initResult.reference,
-              'createdAt': FieldValue.serverTimestamp(),
+            try {
+              await _firestore.collection('orders').doc(currentOrderId).set({
+                'orderId': currentOrderId,
+                'userId': user.uid,
+                'userEmail': user.email,
+                'serviceName': summary.isEmpty ? 'Marketplace Order' : summary,
+                // Only plain values are saved (cart items also hold an icon object,
+                // which Firestore cannot store and which made the save fail).
+                'items': _cart
+                    .map((i) => <String, dynamic>{
+                  'id': i['id']?.toString(),
+                  'name': (i['name'] ?? 'Product').toString(),
+                  'category': i['category']?.toString(),
+                  'price': (i['price'] as num?) ?? 0,
+                  'quantity': (i['quantity'] as num?)?.toInt() ?? 1,
+                  if (i['image'] is String) 'image': i['image'],
+                })
+                    .toList(),
+                'totalAmount': grandTotal,
+                'price': grandTotal,
+                'creditUsed': creditUsed,
+                'amountPaid': payable,
+                'shippingMethod': selectedShipping['title'] ?? 'Standard Delivery',
+                'deliveryMethod': selectedShipping['title'] ?? 'Standard Delivery',
+                'shippingAddress': addressDetails,
+                'deliveryAddress': addressDetails,
+                'status': 'confirmed',
+                'paymentStatus': 'paid',
+                'paymentReference': initResult.reference,
+                'createdAt': FieldValue.serverTimestamp(),
+              });
+            } catch (e) {
+              _showMessage(
+                  'Your payment went through (ref ${initResult.reference}) but we could not save your order. Please contact us with this reference.');
+              return;
+            }
+
+            await CreditHelper.spendCredit(amount: creditUsed, refId: currentOrderId);
+            await _awardPurchasePoints(currentOrderId);
+
+            if (!mounted) return;
+            setState(() {
+              _cart.clear();
             });
 
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) return;
-
-              setState(() {
-                _cart.clear();
-              });
-
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder: (context) => AlertDialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  title: const Row(
-                    children: [
-                      Icon(Icons.check_circle, color: Colors.green),
-                      SizedBox(width: 8),
-                      Text('Order Confirmed!'),
-                    ],
-                  ),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Receipt Ref: ${initResult.reference}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                      const SizedBox(height: 8),
-                      Text('Method: ${selectedShipping['title']}'),
-                      Text('Est. Delivery: ${selectedShipping['days']}'),
-                      Text('Total Paid: R${grandTotal.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  actions: [
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: primaryPurple, foregroundColor: Colors.white),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => const OrdersScreen()),
-                        );
-                      },
-                      child: const Text('VIEW MY ORDERS'),
-                    ),
+            final NavigatorState navigator = Navigator.of(context);
+            await showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (dialogContext) => AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                title: const Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('Order Confirmed!'),
                   ],
                 ),
-              );
-            });
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Receipt Ref: ${initResult.reference}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    const SizedBox(height: 8),
+                    Text('Method: ${selectedShipping['title']}'),
+                    Text('Est. Delivery: ${selectedShipping['days']}'),
+                    Text('Total Paid: R${payable.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                actions: [
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: primaryPurple, foregroundColor: Colors.white),
+                    onPressed: () {
+                      Navigator.pop(dialogContext);
+                      navigator.push(
+                        MaterialPageRoute(builder: (_) => const OrdersScreen(initialTab: 1)),
+                      );
+                    },
+                    child: const Text('VIEW MY ORDERS'),
+                  ),
+                ],
+              ),
+            );
           } else if (mounted) {
             _showMessage(verification.message ?? 'Payment verification failed.');
           }
         }
       }
     } catch (e) {
-      if (mounted) Navigator.pop(context);
+      // Only close the spinner if it is still open. Popping anything else
+      // would close the marketplace page and leave a black screen.
+      if (spinnerOpen && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
       _showMessage('Error processing checkout: $e');
     }
   }
@@ -1749,6 +1809,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             ),
           ),
           _buildProfileMenuItem(
+            icon: Icons.receipt_long_outlined,
+            title: "Refunds & Rescheduling",
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const RefundsPage()),
+            ),
+          ),
+          _buildProfileMenuItem(
             icon: Icons.settings_outlined,
             title: "Settings",
             onTap: () => Navigator.push(
@@ -1756,6 +1824,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               MaterialPageRoute(builder: (_) => const SettingsScreen()),
             ),
           ),
+
           const SizedBox(height: 12),
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(

@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'firebase_options.dart';
 import 'splash.dart';
-import 'login_screen.dart';
-import 'marketplace.dart';
 import 'booking_page.dart';
-import 'settings.dart';
 import 'loyalty.dart';
+import 'orders.dart';
+import 'client_chat_system.dart';
+import 'notifications_screen.dart';
+import 'notification_prefs_service.dart';
+import 'notification_service.dart';
+import 'settings.dart'; // Ensure settings is imported
 
-// Global notifier to trigger theme updates dynamically across the app
-final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,10 +23,19 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Load stored dark mode preference on startup
-  final prefs = await SharedPreferences.getInstance();
-  final isDarkMode = prefs.getBool('isDarkMode') ?? false;
-  themeNotifier.value = isDarkMode ? ThemeMode.dark : ThemeMode.light;
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  FirebaseAuth.instance.authStateChanges().listen((user) async {
+    if (user == null) return;
+    try {
+      await FirebaseMessaging.instance.requestPermission();
+      await NotificationService.instance.init(
+        navigatorKey,
+        knownRoutes: {'/loyalty', '/booking', '/orders', '/chat', '/notifications', '/settings'},
+      );
+      await NotificationPrefsService().registerToken();
+    } catch (_) {}
+  });
 
   runApp(const MyApp());
 }
@@ -34,169 +45,30 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: themeNotifier,
-      builder: (context, currentMode, child) {
-        return MaterialApp(
-          debugShowCheckedModeBanner: false,
-          title: 'Kotton Kandy',
-
-          // Connects the themeNotifier toggle state
-          themeMode: currentMode,
-
-          // Light Theme
-          theme: ThemeData(
-            fontFamily: 'Poppins',
-            useMaterial3: true,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFFE91E63),
-            ),
-            scaffoldBackgroundColor: Colors.white,
-            appBarTheme: const AppBarTheme(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
-              elevation: 0,
-            ),
-            inputDecorationTheme: InputDecorationTheme(
-              filled: true,
-              fillColor: const Color(0xFFF8F8F8),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(
-                  color: Color(0xFFE91E63),
-                  width: 2,
-                ),
-              ),
-              errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(
-                  color: Colors.red,
-                ),
-              ),
-              focusedErrorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(
-                  color: Colors.red,
-                  width: 2,
-                ),
-              ),
-              labelStyle: const TextStyle(
-                color: Colors.black,
-              ),
-              hintStyle: const TextStyle(
-                color: Colors.black54,
-              ),
-            ),
-            elevatedButtonTheme: ElevatedButtonThemeData(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE91E63),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(
-                  double.infinity,
-                  55,
-                ),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                textStyle: const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ),
-
-          // Dark Theme
-          darkTheme: ThemeData(
-            brightness: Brightness.dark,
-            fontFamily: 'Poppins',
-            useMaterial3: true,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFFE91E63),
-              brightness: Brightness.dark,
-            ),
-            scaffoldBackgroundColor: const Color(0xFF121212),
-            appBarTheme: const AppBarTheme(
-              backgroundColor: Color(0xFF121212),
-              foregroundColor: Colors.white,
-              elevation: 0,
-            ),
-            inputDecorationTheme: InputDecorationTheme(
-              filled: true,
-              fillColor: const Color(0xFF1E1E1E),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(
-                  color: Color(0xFFE91E63),
-                  width: 2,
-                ),
-              ),
-              errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(
-                  color: Colors.red,
-                ),
-              ),
-              focusedErrorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(
-                  color: Colors.red,
-                  width: 2,
-                ),
-              ),
-              labelStyle: const TextStyle(
-                color: Colors.white,
-              ),
-              hintStyle: const TextStyle(
-                color: Colors.white54,
-              ),
-            ),
-            elevatedButtonTheme: ElevatedButtonThemeData(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE91E63),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(
-                  double.infinity,
-                  55,
-                ),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                textStyle: const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ),
-
-          home: const Splash(),
-
-          routes: {
-            '/booking': (context) => const BookingPage(),
-            '/loyalty': (context) => const LoyaltyScreen(),
-          },
-        );
+    return MaterialApp(
+      navigatorKey: navigatorKey,
+      debugShowCheckedModeBanner: false,
+      title: 'Kotton Kandy',
+      themeMode: ThemeMode.light,
+      theme: ThemeData(
+        fontFamily: 'Poppins',
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFE91E63),
+        ),
+        scaffoldBackgroundColor: Colors.white,
+      ),
+      home: const Splash(),
+      routes: {
+        '/booking': (context) => const BookingPage(),
+        '/loyalty': (context) => const LoyaltyScreen(),
+        '/notifications': (context) => const NotificationsScreen(),
+        '/orders': (context) => const OrdersScreen(),
+        '/settings': (context) => const SettingsScreen(),
+        '/chat': (context) => const ChatScreen(
+          salonId: 'kotton_kandy',
+          salonName: 'Kotton Kandy',
+        ),
       },
     );
   }

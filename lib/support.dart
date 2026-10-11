@@ -16,11 +16,11 @@ class _SupportScreenState extends State<SupportScreen> {
   final List<Map<String, String>> _faqs = [
     {
       "question": "How do I earn loyalty points?",
-      "answer": "You earn loyalty points automatically every time you complete a booking or make a purchase through the app. 100 points equals \R1 off your next order."
+      "answer": "You earn 25 points for every order you place in the app, and 50 points for every completed booking (scan the QR code at the salon after your appointment). When you reach 500 points you can redeem them for R100 credit."
     },
     {
       "question": "How do I cancel or reschedule a booking?",
-      "answer": "Go to the Bookings tab, select your active booking, and tap 'Cancel' or 'Reschedule'. Cancellations made 24 hours in advance receive a full refund."
+      "answer": "Open the Refunds page to cancel or reschedule a booking. If you cancel because you cannot make it, you receive a 50% refund. If the salon cancels your appointment, you receive a full refund."
     },
     {
       "question": "What payment options do you accept?",
@@ -40,7 +40,7 @@ class _SupportScreenState extends State<SupportScreen> {
     },
     {
       "question": "What is the refund policy?",
-      "answer": "Refunds are processed within 3-5 business days back to your original payment method upon approved cancellation or item return."
+      "answer": "If you cancel a booking yourself, you receive a 50% refund of what you paid. If the salon cancels your booking, you receive a full refund. Approved refunds are sent back to your original payment method within 3-5 business days."
     },
     {
       "question": "How do I contact customer support directly?",

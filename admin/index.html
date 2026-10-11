@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Kotton Kandy Admin</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
     <style>
         :root{--p:#6B3A82;--pk:#E91E63;--bg:#f6f2f8;--card:#fff;--tx:#222;--mu:#777;--bd:#e8e0ec}
         @media(prefers-color-scheme:dark){:root{--bg:#121212;--card:#1e1e1e;--tx:#eee;--mu:#999;--bd:#333}}
@@ -21,7 +22,8 @@
         .err{color:#d32f2f;font-size:13px;min-height:18px;margin-top:8px}
         #app{display:flex;min-height:100vh}
         nav{width:220px;background:var(--p);color:#fff;padding:20px 12px;display:flex;flex-direction:column;gap:6px;flex-shrink:0}
-        nav h2{margin:0 8px 18px;font-size:18px}
+        nav h2{margin:0 4px 18px;font-size:17px;display:flex;align-items:center;gap:8px;white-space:nowrap}
+        nav h2 img{width:38px;height:38px;border-radius:50%;flex-shrink:0}
         nav a{padding:11px 14px;border-radius:10px;cursor:pointer;color:#fff;opacity:.85}
         nav a.on,nav a:hover{background:#ffffff26;opacity:1}
         nav .out{margin-top:auto}
@@ -36,6 +38,22 @@
         th{color:var(--mu);font-weight:600;font-size:12px;text-transform:uppercase}
         td select{margin:0;padding:6px;width:auto}
         img.th{width:40px;height:40px;border-radius:8px;object-fit:cover}
+        .pform input,.pform textarea{margin-bottom:10px}
+        .pstat{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}.pstat span{background:var(--bg);border-radius:10px;padding:6px 12px;font-size:13px}
+        .pbar{height:10px;background:var(--bd);border-radius:6px;overflow:hidden;margin:10px 0}.pbar i{display:block;height:100%;width:0;background:var(--p);transition:width .2s}
+        .steps ol{margin:6px 0;padding-left:20px}
+        tr.clk{cursor:pointer}tr.clk:hover td{background:var(--bg)}
+        .av{width:34px;height:34px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;background:var(--p);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700}
+        .uhead{display:flex;align-items:center;gap:16px;margin-bottom:14px}
+        .uhead .big{width:84px;height:84px;border-radius:50%;object-fit:cover;background:var(--p);color:#fff;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;flex-shrink:0}
+        .uhead h4{margin:0;font-size:22px}.uhead div{min-width:0;word-break:break-word}
+        .ustats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:14px 0}
+        .ustat{background:var(--bg);border-radius:12px;padding:12px}.ustat b{display:block;font-size:22px;color:var(--p)}.ustat span{font-size:12px;color:var(--mu)}
+        .ulist{font-size:13px;margin:6px 0 14px}.ulist div{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--bd)}
+        .ulist small{color:var(--mu)}
+        .umbox{max-width:620px}
+        img.ph{width:52px;height:52px;border-radius:8px;object-fit:cover;cursor:zoom-in;border:1px solid var(--bd)}
+        #photoBox{max-width:92vw;max-height:88vh;border-radius:12px;background:#fff}
         .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
         .empty{color:var(--mu);padding:20px;text-align:center}
         .chat{display:grid;grid-template-columns:270px 1fr;gap:14px;height:72vh}
@@ -49,6 +67,40 @@
         .m.me{align-self:flex-end;background:var(--p);color:#fff}
         .send{display:flex;gap:8px;padding:10px;border-top:1px solid var(--bd)}.send input{margin:0}
         .badge{background:var(--pk);color:#fff;border-radius:10px;padding:1px 8px;font-size:12px;margin-left:6px}
+        textarea{width:100%;padding:12px 14px;border:1px solid var(--bd);border-radius:12px;margin-bottom:12px;font:inherit;background:var(--bg);color:var(--tx);resize:vertical;min-height:90px}
+        .tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+        .tabs button{background:var(--card);color:var(--tx);border:1px solid var(--bd)}
+        .tabs button.on{background:var(--p);color:#fff;border-color:var(--p)}
+        .chip{padding:3px 12px;border-radius:12px;font-size:12px;font-weight:600;text-transform:capitalize}
+        .chip.confirmed{background:#ffe0b2;color:#7a4a00}.chip.shipped,.chip.out_for_delivery,.chip.ready_for_collection{background:#e1bee7;color:#4a148c}.chip.delivered{background:#c8e6c9;color:#1b5e20}.chip.cancelled{background:#ffcdd2;color:#b71c1c}
+        .chip.pending{background:#ffe0b2;color:#7a4a00}.chip.approved{background:#c8e6c9;color:#1b5e20}.chip.declined{background:#ffcdd2;color:#b71c1c}
+        .rhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px;font-size:16px}
+        .rmeta{color:var(--mu);font-size:13px;line-height:1.7}
+        .rnote{margin-top:8px;font-style:italic;font-size:14px}
+        .rsum{border-top:1px solid var(--bd);margin-top:12px;padding-top:10px;max-width:340px}
+        .rsum div{display:flex;justify-content:space-between;padding:2px 0;font-size:14px}
+        .rsum .tot{font-weight:700;color:var(--p)}
+        .ract{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+        .modal{position:fixed;inset:0;background:#0009;display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+        .mbox{background:var(--card);border-radius:16px;padding:24px;width:100%;max-width:460px;max-height:90vh;overflow:auto}
+        .mbox h4{margin:0 0 10px;font-size:20px}
+        .mbtns{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+        button.ghost{background:transparent;color:var(--mu);border:1px solid var(--bd)}
+        .cp{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--bd);border-radius:12px;padding:10px 14px;margin-bottom:10px;word-break:break-all}
+        .cp small{display:block;color:var(--mu)}.cp button{padding:6px 12px;font-size:13px;flex-shrink:0}
+        .steps{font-size:14px;line-height:1.8;margin:14px 0}
+        .qrcard{max-width:420px;margin:0 auto;text-align:center;padding:28px}
+        #qrWrap{background:#fff;padding:16px;border:2px solid var(--p);border-radius:16px;display:inline-block;margin:18px 0}
+        #qrBox{width:260px;height:260px}#qrBox img,#qrBox canvas{max-width:100%}
+        .lk{display:grid;grid-template-columns:340px 1fr;gap:14px;height:74vh}
+        .lkside{display:flex;flex-direction:column;gap:10px;min-height:0}
+        .lkbar{display:flex;gap:8px;flex-wrap:wrap}.lkbar input{margin:0;flex:1;min-width:140px}
+        #lkList{overflow:auto;flex:1;display:flex;flex-direction:column;gap:8px;min-height:0}
+        .lki{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;cursor:pointer}
+        .lki:hover,.lki.on{border-color:var(--p)}.lki b{display:block}.lki small{color:var(--mu);display:block;line-height:1.5}
+        .lki .km{float:right;color:var(--p);font-weight:700}
+        #lkMap{border-radius:14px;min-height:300px;z-index:0}
+        @media(max-width:700px){.lk{grid-template-columns:1fr;height:auto}#lkMap{height:50vh}}
         @media(max-width:700px){#app{flex-direction:column}nav{width:100%;flex-direction:row;flex-wrap:wrap;padding:10px}nav h2{width:100%;margin:0 4px 6px}nav .out{margin:0 0 0 auto}.chat{grid-template-columns:1fr;height:auto}.clist{max-height:200px}.cview{height:60vh}}
     </style>
 </head>
@@ -67,10 +119,15 @@
 
 <div id="app" class="hide">
     <nav>
-        <h2>💜 Kotton Kandy</h2>
+        <h2><img src="data:image/png;base64,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" alt="">Kotton Kandy</h2>
         <a data-t="dash" class="on">Dashboard</a>
         <a data-t="bookings">Bookings</a>
+        <a data-t="orders">Orders<span class="badge hide" id="orderBadge"></span></a>
+        <a data-t="lockers">Lockers</a>
+        <a data-t="promos">Promotional Emails</a>
+        <a data-t="refunds">Refunds<span class="badge hide" id="refundBadge"></span></a>
         <a data-t="messages">Messages</a>
+        <a data-t="loyalty">Loyalty QR</a>
         <a data-t="users">Users</a>
         <a data-t="products">Products</a>
         <a class="out" id="logout">Sign out</a>
@@ -99,6 +156,78 @@
                 </div>
             </div>
         </section>
+        <section id="loyalty" class="hide">
+            <h3>Loyalty QR code</h3>
+            <div class="card qrcard">
+                <b style="font-size:18px">Scan to earn 50 loyalty points</b>
+                <div class="sub" style="margin:4px 0 0">Valid today only (<span id="qrDate">...</span>)</div>
+                <div id="qrWrap"><div id="qrBox"></div></div>
+                <div class="err" id="qrErr"></div>
+                <p class="sub" style="font-size:12px">A new code is created automatically every day.<br>Clients must have a paid booking today to earn points.<br>Show this page on a tablet at reception.</p>
+                <button class="sec" id="qrNew">Generate a new code now</button>
+            </div>
+        </section>
+        <section id="orders" class="hide">
+            <h3>Orders</h3>
+            <div class="tabs" id="orderTabs"></div>
+            <div id="orderList"></div>
+        </section>
+        <section id="promos" class="hide">
+            <h3>Promotional emails</h3>
+            <div class="card pform">
+                <div class="sub" style="margin:0 0 10px">Sends one email to each client who has turned on <b>Promotional Alerts</b> in the app. It is sent from your own Gmail account, so nothing extra to pay.</div>
+                <input id="prSubject" placeholder="Subject, e.g. 20% off all press-on sets this weekend">
+                <textarea id="prBody" style="min-height:170px" placeholder="Write your message here. Each client sees it with 'Hi (their name),' at the top and an unsubscribe note at the bottom."></textarea>
+                <label style="display:flex;gap:8px;align-items:center;font-size:14px;margin-bottom:10px"><input type="checkbox" id="prInApp" checked style="width:auto;margin:0"> Also send as an in-app notification</label>
+                <div class="pstat" id="prStats"></div>
+                <div class="pbar hide" id="prBarWrap"><i id="prBar"></i></div>
+                <div class="err" id="prMsg" style="color:var(--tx)"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <button class="ghost" id="prTest">Send a test to myself</button>
+                    <button id="prSend">Send to all opted-in clients</button>
+                    <button class="del hide" id="prStop" style="padding:11px 18px;font-size:inherit">Stop</button>
+                    <button class="ghost" id="prCopy">Copy emails</button>
+                </div>
+            </div>
+            <div class="card">
+                <b>One-time Gmail setup</b>
+                <div class="steps">
+                    <ol>
+                        <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener" style="color:var(--p)">console.cloud.google.com</a>, create a project and open <b>APIs &amp; Services &rarr; Library</b>. Enable the <b>Gmail API</b>.</li>
+                        <li><b>OAuth consent screen</b>: choose <b>External</b>, fill in the app name, and under <b>Test users</b> add <b>kottonkandybeautybar4@gmail.com</b> (the Gmail you send from).</li>
+                        <li><b>Credentials &rarr; Create credentials &rarr; OAuth client ID</b> &rarr; type <b>Web application</b>. Under <b>Authorized JavaScript origins</b> add <b>http://localhost:8000</b>.</li>
+                        <li>Copy the <b>Client ID</b> and paste it below.</li>
+                    </ol>
+                </div>
+                <input id="prClient" placeholder="Paste your Google Client ID here (ends in .apps.googleusercontent.com)">
+                <button class="sec" id="prSaveClient">Save</button>
+                <p class="sub" style="font-size:12px">Gmail lets a normal account send about 500 emails a day. Only clients who opted in are emailed. Do not email people who did not agree to marketing.</p>
+            </div>
+        </section>
+        <section id="lockers" class="hide">
+            <h3>Nearest PUDO lockers</h3>
+            <div class="lk">
+                <div class="lkside">
+                    <div class="lkbar">
+                        <input id="lkAddr" placeholder="Type your address or suburb, e.g. Sandton">
+                        <button id="lkSearch">Search</button>
+                    </div>
+                    <div class="lkbar">
+                        <button class="sec" id="lkGps">Use my location</button>
+                        <button class="ghost" id="lkSave">Save as my location</button>
+                    </div>
+                    <div class="sub" id="lkStatus" style="margin:0;font-size:13px"></div>
+                    <div id="lkList"></div>
+                </div>
+                <div id="lkMap"></div>
+            </div>
+            <p class="sub" style="font-size:12px;margin-top:12px">Lockers come from the official PUDO list when it is available. Otherwise this page uses parcel lockers mapped on OpenStreetMap, which may not include every PUDO locker. Always confirm the locker on the <a href="https://www.pudo.co.za" target="_blank" rel="noopener" style="color:var(--p)">official PUDO website or app</a> before sending a parcel. If you get an official locker list file, save it as <b>lockers.json</b> next to this page and it will be used instead.</p>
+        </section>
+        <section id="refunds" class="hide">
+            <h3>Refund requests</h3>
+            <div class="tabs" id="refundTabs"></div>
+            <div id="refundList"></div>
+        </section>
         <section id="users" class="hide">
             <h3>Users</h3>
             <div class="card" id="userTable"></div>
@@ -123,11 +252,81 @@
     </main>
 </div>
 
+<div id="orderModal" class="modal hide">
+    <div class="mbox">
+        <h4>Update order</h4>
+        <p class="sub" id="orderInfo"></p>
+        <select id="oStatus">
+            <option value="confirmed">Confirmed</option>
+            <option value="shipped">Shipped</option>
+            <option value="out_for_delivery">Out for delivery</option>
+            <option value="ready_for_collection">Ready for collection</option>
+            <option value="delivered">Delivered</option>
+            <option value="cancelled">Cancelled</option>
+        </select>
+        <input id="oCourier" placeholder="Courier">
+        <input id="oTracking" placeholder="Tracking number">
+        <input id="oLink" placeholder="Tracking link (optional)">
+        <div class="err" id="oErr"></div>
+        <div class="mbtns">
+            <button class="ghost" id="oCancel">Cancel</button>
+            <button id="oSave">Save</button>
+        </div>
+    </div>
+</div>
+
+<div id="userModal" class="modal hide" onclick="if(event.target===this)this.classList.add('hide')">
+    <div class="mbox umbox">
+        <div id="userBody"></div>
+        <div class="mbtns"><button class="sec" onclick="document.getElementById('userModal').classList.add('hide')">Close</button></div>
+    </div>
+</div>
+
+<div id="photoModal" class="modal hide" onclick="this.classList.add('hide')" style="cursor:zoom-out">
+    <img id="photoBox" alt="Reference photo">
+</div>
+
+<div id="reasonModal" class="modal hide">
+    <div class="mbox">
+        <h4 id="reasonTitle"></h4>
+        <p class="sub" id="reasonInfo"></p>
+        <textarea id="reasonText"></textarea>
+        <div class="err" id="reasonErr"></div>
+        <div class="mbtns">
+            <button class="ghost" id="reasonCancel">Cancel</button>
+            <button id="reasonConfirm">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div id="psModal" class="modal hide">
+    <div class="mbox">
+        <h4>Send refund on Paystack</h4>
+        <p class="sub" id="psInfo"></p>
+        <div class="cp"><div><small>Refund amount</small><b id="psAmount"></b></div><button class="sec" id="psCopyAmt">Copy</button></div>
+        <div class="cp"><div><small>Payment reference</small><b id="psRef"></b></div><button class="sec" id="psCopyRef">Copy</button></div>
+        <div class="steps">
+            1. Click <b>Open Paystack</b> and log in.<br>
+            2. Find the transaction using the payment reference.<br>
+            3. Choose <b>Refund</b> and enter the refund amount above.<br>
+            4. Come back here and click <b>Mark refund as sent</b>.
+        </div>
+        <div class="mbtns">
+            <button class="ghost" id="psLater">Do this later</button>
+            <button class="sec" id="psSent">Mark refund as sent</button>
+            <button id="psOpen">Open Paystack</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
-    const COL = { bookings: 'appointments', users: 'users', products: 'products', admins: 'admins', chats: 'chats', notifications: 'notifications' };
+    const COL = { bookings: 'appointments', users: 'users', products: 'products', admins: 'admins', chats: 'chats', notifications: 'notifications', refunds: 'refund_requests', orders: 'orders' };
 
     firebase.initializeApp({
       apiKey: 'AIzaSyDMYIUD3vMTyuBhgIzwh-CQGh0Bi8jy_ug',
@@ -141,6 +340,8 @@
     const $ = id => document.getElementById(id);
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     let unsubs = [], msgUnsub = null, bookings = [], users = [], products = [], chats = [], msgs = [], activeChat = null;
+    let orders = [], orderTab = 'new', editOrder = null;
+    let refunds = [], refundTab = 'pending', refundErr = '', decision = null, psReq = null, psRef = '';
 
     // ---- Auth ----
     $('loginBtn').onclick = async () => {
@@ -169,6 +370,8 @@
       a.classList.add('on');
       document.querySelectorAll('main section').forEach(s => s.classList.add('hide'));
       $(a.dataset.t).classList.remove('hide');
+      if (a.dataset.t === 'loyalty') loadLoyaltyQr();
+      if (a.dataset.t === 'lockers') initLockers();
     });
 
     // ---- Live data ----
@@ -179,6 +382,11 @@
       watch(COL.users, d => users = d);
       watch(COL.products, d => products = d);
       watch(COL.chats, d => chats = d);
+      watch(COL.orders, d => orders = d);
+      unsubs.push(db.collection(COL.refunds).onSnapshot(
+        s => { refunds = s.docs.map(d => ({ id: d.id, ...d.data() })); refundErr = ''; render(); },
+        e => { console.error(COL.refunds, e); refundErr = e.message; renderRefunds(); }));
+      loadLoyaltyQr();
     }
 
     // ---- Helpers (match the app's field names) ----
@@ -190,10 +398,81 @@
     const bName = b => b.serviceName || b.service || b.name || '—';
     const bWho = b => b.userEmail || b.email || uName(b.userId);
     const bPrice = b => b.price ?? b.amount ?? 0;
+    // Reference photo: a Storage link, or (backup) a small image saved inside the booking.
+    const bPhoto = b => {
+      const u = b.referencePhoto || b.referenceImageUrl || b.referenceImage || b.imageUrl;
+      if (typeof u === 'string' && u) return u;
+      return b.referencePhotoData ? 'data:image/jpeg;base64,' + b.referencePhotoData : '';
+    };
+    window.showPhoto = id => {
+      const b = bookings.find(x => x.id === id); if (!b || !bPhoto(b)) return;
+      $('photoBox').src = bPhoto(b); $('photoModal').classList.remove('hide');
+    };
     const bStatus = b => (b.status || 'pending').toLowerCase();
     const table = (heads, rows) => rows.length
       ? `<table><thead><tr>${heads.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`
       : '<div class="empty">Nothing here yet.</div>';
+
+    // ---- Users: profile helpers ----
+    const uEmail = u => u.email || u.userEmail || u.emailAddress
+      || (bookings.find(b => b.userId === u.id && (b.userEmail || b.email)) || {}).userEmail
+      || (orders.find(o => o.userId === u.id && o.userEmail) || {}).userEmail || '';
+    const uFullName = u => u.name || u.fullName || u.displayName || [u.firstName, u.lastName].filter(Boolean).join(' ')
+      || (chats.find(c => c.clientId === u.id && c.clientName) || {}).clientName || '';
+    const uPhoto = u => {
+      for (const k of ['photoURL', 'photoUrl', 'profilePicture', 'profileImage', 'profilePic', 'imageUrl', 'photo', 'avatar']) {
+        const v = u[k]; if (typeof v === 'string' && (v.startsWith('http') || v.startsWith('data:'))) return v;
+      }
+      for (const k of ['photoData', 'profilePhotoData', 'profileImageData']) if (typeof u[k] === 'string' && u[k]) return 'data:image/jpeg;base64,' + u[k];
+      return '';
+    };
+    const avatar = (u, name) => uPhoto(u)
+      ? `<img class="av" src="${esc(uPhoto(u))}" alt="">`
+      : `<span class="av">${esc((name || uEmail(u) || '?')[0].toUpperCase())}</span>`;
+    const SAST = () => new Date(Date.now() + 2 * 3600 * 1000).toISOString().split('T')[0];
+    const apptDay = b => b.date?.toDate ? b.date.toDate().toISOString().split('T')[0] : String(b.date || '').slice(0, 10);
+    const apptGroup = b => {
+      const s = bStatus(b);
+      if (s.includes('cancel') || s.includes('fail')) return 'cancelled';
+      if (s === 'completed' || (apptDay(b) && apptDay(b) < SAST())) return 'past';
+      return 'pending';
+    };
+    const orderGroup = o => {
+      const s = String(o.status || 'confirmed').toLowerCase().replace(/[\s-]+/g, '_');
+      if (s.includes('cancel') || s.includes('fail')) return 'cancelled';
+      if (['delivered', 'collected', 'completed'].includes(s)) return 'past';
+      return 'pending';
+    };
+    window.openUser = id => {
+      const u = users.find(x => x.id === id); if (!u) return;
+      const name = uFullName(u) || 'No name saved';
+      const ub = bookings.filter(b => b.userId === id).sort((a, b) => ts(b.createdAt) - ts(a.createdAt));
+      const uo = orders.filter(o => o.userId === id).sort((a, b) => ts(b.createdAt) - ts(a.createdAt));
+      const cnt = (arr, f, g) => arr.filter(x => f(x) === g).length;
+      const joined = ts(u.createdAt) ? new Date(ts(u.createdAt)).toLocaleDateString() : '';
+      const pr = u.prefs || {};
+      $('userBody').innerHTML = `
+        <div class="uhead">
+          ${uPhoto(u) ? `<img class="big" src="${esc(uPhoto(u))}" alt="">` : `<div class="big">${esc(name[0].toUpperCase())}</div>`}
+          <div><h4>${esc(name)}</h4>
+            <div class="sub" style="margin:2px 0">${esc(uEmail(u) || 'No email saved')}</div>
+            <div class="sub" style="margin:0">${esc(u.phone || u.phoneNumber || 'No phone saved')}${joined ? ' · Joined ' + esc(joined) : ''}</div></div>
+        </div>
+        <div class="ustats">
+          <div class="ustat"><b>${esc(u.points ?? u.loyaltyPoints ?? 0)}</b><span>Loyalty points</span></div>
+          <div class="ustat"><b>${u.credit ? 'R' + esc(u.credit) : 'R0'}</b><span>Credit</span></div>
+          <div class="ustat"><b>${cnt(ub, apptGroup, 'pending')}</b><span>Appointments pending</span></div>
+          <div class="ustat"><b>${cnt(ub, apptGroup, 'past')}</b><span>Appointments past</span></div>
+          <div class="ustat"><b>${cnt(uo, orderGroup, 'pending')}</b><span>Orders pending</span></div>
+          <div class="ustat"><b>${cnt(uo, orderGroup, 'past')}</b><span>Orders delivered</span></div>
+        </div>
+        <div class="sub" style="font-size:12px;margin:0 0 10px">Notifications: push ${pr.push === false ? 'off' : 'on'} · email ${pr.email === false ? 'off' : 'on'} · promotions ${pr.promotions === true ? 'on' : 'off'}</div>
+        <b>Appointments (${ub.length})</b>
+        <div class="ulist">${ub.length ? ub.slice(0, 8).map(b => `<div><span>${esc(bName(b))}<br><small>${esc(bDate(b))} ${esc(bTime(b))}</small></span><span>${esc(apptGroup(b))} · ${esc(bStatus(b))}</span></div>`).join('') : '<div><small>None yet</small></div>'}</div>
+        <b>Orders (${uo.length})</b>
+        <div class="ulist">${uo.length ? uo.slice(0, 8).map(o => `<div><span>Order #${esc(String(o.id).slice(0, 8))}<br><small>${esc(ts(o.createdAt) ? new Date(ts(o.createdAt)).toLocaleDateString() : '')} · R${esc(o.amountPaid ?? o.totalAmount ?? o.price ?? 0)}</small></span><span>${esc(String(o.status || 'confirmed'))}</span></div>`).join('') : '<div><small>None yet</small></div>'}</div>`;
+      $('userModal').classList.remove('hide');
+    };
 
     function render() {
       const sorted = [...bookings].sort((a, b) => ts(b.createdAt) - ts(a.createdAt));
@@ -208,21 +487,24 @@
         [products.length, 'Products & services']
       ].map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
 
-      $('latest').innerHTML = table(['Service', 'Client', 'Date', 'Time', 'Status'],
-        sorted.slice(0, 5).map(b => `<tr><td>${esc(bName(b))}</td><td>${esc(bWho(b))}</td><td>${esc(bDate(b))}</td><td>${esc(bTime(b))}</td><td>${esc(bStatus(b))}</td></tr>`));
+      $('latest').innerHTML = table(['Service', 'Client', 'Date', 'Time', 'Status', 'Photo'],
+        sorted.slice(0, 5).map(b => `<tr><td>${esc(bName(b))}</td><td>${esc(bWho(b))}</td><td>${esc(bDate(b))}</td><td>${esc(bTime(b))}</td><td>${esc(bStatus(b))}</td><td>${bPhoto(b) ? `<img class="ph" src="${esc(bPhoto(b))}" onclick="showPhoto('${b.id}')" alt="Reference">` : '—'}</td></tr>`));
 
       $('bookTable').innerHTML = table(['Service', 'Client', 'Date', 'Time', 'Price', 'Payment', 'Photo', 'Status', ''],
         sorted.map(b => {
           const opts = ALL_STATUS.includes(bStatus(b)) ? ALL_STATUS : [...ALL_STATUS, bStatus(b)];
           return `<tr><td>${esc(bName(b))}</td><td>${esc(bWho(b))}</td><td>${esc(bDate(b))}</td><td>${esc(bTime(b))}</td>
           <td>R${esc(bPrice(b))}</td><td>${esc(b.paymentStatus || '—')}</td>
-          <td>${b.referencePhoto ? `<a href="${esc(b.referencePhoto)}" target="_blank">View</a>` : '—'}</td>
+          <td>${bPhoto(b) ? `<img class="ph" src="${esc(bPhoto(b))}" onclick="showPhoto('${b.id}')" alt="Reference">` : '—'}</td>
           <td><select onchange="setStatus('${b.id}',this.value)">${opts.map(s => `<option ${s === bStatus(b) ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
           <td><button class="del" onclick="delDoc('${COL.bookings}','${b.id}')">Delete</button></td></tr>`;
         }));
 
-      $('userTable').innerHTML = table(['Name', 'Email', 'Phone', 'Points'],
-        users.map(u => `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(u.phone)}</td><td>${esc(u.points ?? u.loyaltyPoints ?? 0)}</td></tr>`));
+      $('userTable').innerHTML = table(['Name', 'Email', 'Phone', 'Points', 'Credit', 'Bookings', 'Orders'],
+        [...users].sort((a, b) => (uFullName(a) || '~').localeCompare(uFullName(b) || '~')).map(u => {
+          const nB = bookings.filter(b => b.userId === u.id).length, nO = orders.filter(o => o.userId === u.id).length;
+          return `<tr class="clk" onclick="openUser('${u.id}')"><td>${avatar(u, uFullName(u))}${esc(uFullName(u) || '—')}</td><td>${esc(uEmail(u) || '—')}</td><td>${esc(u.phone || u.phoneNumber || '—')}</td><td>${esc(u.points ?? u.loyaltyPoints ?? 0)}</td><td>${u.credit ? 'R' + esc(u.credit) : '—'}</td><td>${nB}</td><td>${nO}</td></tr>`;
+        }));
 
       $('prodTable').innerHTML = table(['', 'Name', 'Type', 'Category', 'Price', 'Description', ''],
         products.map(p => `<tr><td>${p.imageUrl ? `<img class="th" src="${esc(p.imageUrl)}">` : ''}</td><td>${esc(p.name)}</td>
@@ -236,7 +518,443 @@
         : '<div class="empty">No conversations yet.</div>';
       const ac = chats.find(c => c.id === activeChat);
       if (ac) $('chead').textContent = ac.clientName || uName(ac.clientId);
+      renderOrders();
+      renderPromo();
+      renderRefunds();
     }
+
+    // ---- Loyalty QR (same codes and format as the app: loyalty_codes/{date} -> KK1|date|code) ----
+    // South Africa is UTC+2 all year. Must match the Cloud Function.
+    const sastToday = () => new Date(Date.now() + 2 * 3600 * 1000).toISOString().split('T')[0];
+    const randomCode = () => {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', a = new Uint32Array(16);
+      crypto.getRandomValues(a);
+      return Array.from(a, n => chars[n % chars.length]).join('');
+    };
+    async function loadLoyaltyQr(forceNew = false) {
+      $('qrErr').textContent = '';
+      try {
+        const today = sastToday(), ref = db.collection('loyalty_codes').doc(today);
+        const snap = await ref.get();
+        let code;
+        if (!snap.exists || forceNew) {
+          code = randomCode();
+          await ref.set({ code, date: today, createdAt: FV.serverTimestamp() });
+        } else { code = snap.data().code; }
+        $('qrDate').textContent = today;
+        $('qrBox').innerHTML = '';
+        new QRCode($('qrBox'), { text: 'KK1|' + today + '|' + code, width: 260, height: 260, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+      } catch (e) { $('qrErr').textContent = 'Could not load the code: ' + e.message; }
+    }
+    $('qrNew').onclick = () => {
+      if (confirm('Generate a new code? The current QR code will stop working immediately. Do this only if you think it was shared.')) loadLoyaltyQr(true);
+    };
+
+    // ---- Refunds ----
+    const RLABEL = { cantAttend: 'Client cannot attend (cancellation)', reschedule: 'Reschedule', ownerCancelled: 'Cancelled by the salon (full refund)' };
+    const money = n => 'R' + Number(n || 0).toFixed(2);
+    const rApptDate = r => r.appointmentDate?.toDate ? r.appointmentDate.toDate().toLocaleString() : (r.appointmentDateText || '');
+    const rCreated = r => r.createdAt?.toDate ? r.createdAt.toDate().toLocaleString() : '';
+    const rStatus = r => (r.status || 'pending').toLowerCase();
+    const notifyClient = (userId, title, message) => userId
+      ? db.collection(COL.notifications).add({ userId, title, message, body: message, read: false, createdAt: FV.serverTimestamp() })
+      : Promise.resolve();
+    const copyText = (t, btn) => navigator.clipboard.writeText(t).then(() => {
+      const o = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => btn.textContent = o, 1200);
+    }).catch(() => prompt('Copy this:', t));
+
+    window.setRefundTab = t => { refundTab = t; renderRefunds(); };
+
+    function refundCard(r) {
+      const st = rStatus(r), fee = Number(r.fee || 0);
+      const actions = st === 'pending'
+        ? `<button class="del" style="padding:10px 16px;font-size:14px" onclick="decideRefund('${r.id}', false)">Decline</button><button class="sec" onclick="decideRefund('${r.id}', true)">Approve</button>`
+        : st === 'approved'
+          ? (r.refundSent ? '<b>✅ Refund sent</b>' : `<button onclick="openPaystack('${r.id}')">Send refund on Paystack</button>`)
+          : '';
+      return `<div class="card">
+        <div class="rhead"><b>${esc(r.serviceName || 'Appointment')}</b><span class="chip ${esc(st)}">${esc(st)}</span></div>
+        <div class="rmeta">Client: ${esc(r.userEmail || 'Unknown')}<br>Appointment: ${esc(rApptDate(r))}<br>Requested: ${esc(rCreated(r))}<br>Reason: ${esc(RLABEL[r.reason] || r.reason || '')}</div>
+        ${r.note ? `<div class="rnote">Client note: ${esc(r.note)}</div>` : ''}
+        <div class="rsum"><div><span>Total paid</span><span>${money(r.total)}</span></div>
+          ${fee > 0 ? `<div><span>Cancellation fee</span><span>- ${money(fee)}</span></div>` : ''}
+          <div class="tot"><span>Refund amount</span><span>${money(r.refundAmount)}</span></div></div>
+        ${r.adminReason ? `<div style="margin-top:10px;font-size:14px">Your note: ${esc(r.adminReason)}</div>` : ''}
+        ${actions ? `<div class="ract">${actions}</div>` : ''}
+      </div>`;
+    }
+
+    function renderRefunds() {
+      const rs = [...refunds].sort((a, b) => ts(b.createdAt) - ts(a.createdAt));
+      const count = s => rs.filter(r => rStatus(r) === s).length;
+      $('refundTabs').innerHTML = ['pending', 'approved', 'declined'].map(s =>
+        `<button class="${s === refundTab ? 'on' : ''}" onclick="setRefundTab('${s}')">${s[0].toUpperCase() + s.slice(1)} (${count(s)})</button>`).join('');
+      const p = count('pending');
+      $('refundBadge').textContent = p; $('refundBadge').classList.toggle('hide', !p);
+      if (refundErr) { $('refundList').innerHTML = `<div class="card empty" style="color:#d32f2f">Could not load refund requests: ${esc(refundErr)}<br>Check that the Firestore rules for refund_requests are published.</div>`; return; }
+      const list = rs.filter(r => rStatus(r) === refundTab);
+      $('refundList').innerHTML = list.length ? list.map(refundCard).join('') : `<div class="card empty">No ${refundTab} refund requests.</div>`;
+    }
+
+    // Approve / decline with a reason
+    window.decideRefund = (id, approve) => {
+      const r = refunds.find(x => x.id === id); if (!r) return;
+      decision = { r, approve };
+      $('reasonTitle').textContent = approve ? 'Approve refund' : 'Decline refund';
+      $('reasonInfo').textContent = approve
+        ? `The client will be refunded ${money(r.refundAmount)}. You will then be taken to Paystack to send it.`
+        : 'The client will see this reason.';
+      $('reasonText').value = '';
+      $('reasonText').placeholder = approve ? 'Note to client (optional)' : 'Reason for declining (required)';
+      $('reasonErr').textContent = '';
+      $('reasonConfirm').textContent = approve ? 'Approve' : 'Decline';
+      $('reasonModal').classList.remove('hide');
+      $('reasonText').focus();
+    };
+    $('reasonCancel').onclick = () => $('reasonModal').classList.add('hide');
+    $('reasonConfirm').onclick = async () => {
+      const { r, approve } = decision, text = $('reasonText').value.trim();
+      if (!approve && !text) { $('reasonErr').textContent = 'Please give a reason for declining.'; return; }
+      const note = text || 'Your refund has been approved.';
+      $('reasonConfirm').disabled = true;
+      try {
+        const b = db.batch();
+        b.update(db.collection(COL.refunds).doc(r.id), { status: approve ? 'approved' : 'declined', adminReason: note, decidedAt: FV.serverTimestamp() });
+        // Approving a cancellation frees the time slot and removes it from the client's list.
+        if (approve && r.reason !== 'reschedule') {
+          b.update(db.collection(COL.bookings).doc(r.appointmentId), { status: 'cancelled', cancelledAt: FV.serverTimestamp(), cancelReason: 'Refund approved' });
+        }
+        await b.commit();
+        await notifyClient(r.userId, approve ? 'Refund approved' : 'Refund declined',
+          approve ? `Your refund of ${money(r.refundAmount)} was approved. ${note}` : `Your refund request was declined. ${note}`).catch(console.error);
+        $('reasonModal').classList.add('hide');
+        if (approve) openPaystack(r.id, r);
+      } catch (e) { $('reasonErr').textContent = e.message; }
+      $('reasonConfirm').disabled = false;
+    };
+
+    // Send the refund on Paystack
+    window.openPaystack = (id, obj) => {
+      const r = obj || refunds.find(x => x.id === id); if (!r) return;
+      psReq = r;
+      const bk = bookings.find(x => x.id === r.appointmentId);
+      psRef = (bk && bk.paymentReference) || '';
+      $('psInfo').textContent = `${r.serviceName || ''} · ${r.userEmail || ''}`;
+      $('psAmount').textContent = money(r.refundAmount);
+      $('psRef').textContent = psRef || "Not found on this booking. Search the client's email in Paystack.";
+      $('psModal').classList.remove('hide');
+    };
+    $('psCopyAmt').onclick = e => copyText((Number(psReq.refundAmount) || 0).toFixed(2), e.target);
+    $('psCopyRef').onclick = e => psRef && copyText(psRef, e.target);
+    $('psOpen').onclick = () => window.open('https://dashboard.paystack.com/#/transactions', '_blank');
+    $('psLater').onclick = () => $('psModal').classList.add('hide');
+    $('psSent').onclick = async () => {
+      if (!confirm('Confirm that you have sent the ' + money(psReq.refundAmount) + ' refund on Paystack? The client will be told it was sent.')) return;
+      try {
+        await db.collection(COL.refunds).doc(psReq.id).update({ refundSent: true, refundSentAt: FV.serverTimestamp() });
+        await notifyClient(psReq.userId, 'Refund sent', `Your refund of ${money(psReq.refundAmount)} has been sent.`).catch(console.error);
+        $('psModal').classList.add('hide');
+      } catch (e) { alert(e.message); }
+    };
+
+    // ---- Orders: status + courier tracking number ----
+    const oNorm = s => String(s || 'confirmed').toLowerCase().trim().replace(/[\s-]+/g, '_');
+    const oGroup = s => ['delivered', 'collected', 'completed'].includes(s) ? 'delivered'
+      : ['shipped', 'out_for_delivery', 'ready_for_collection'].includes(s) ? 'shipped'
+      : (s.includes('cancel') || s.includes('fail')) ? 'other' : 'new';
+    const OLABEL = { confirmed: 'Confirmed', pending: 'Pending', shipped: 'Shipped', out_for_delivery: 'Out for delivery',
+      ready_for_collection: 'Ready for collection', delivered: 'Delivered', cancelled: 'Cancelled' };
+    window.setOrderTab = t => { orderTab = t; renderOrders(); };
+
+    function orderCard(o) {
+      const st = oNorm(o.status), items = Array.isArray(o.items) ? o.items : [];
+      const when = ts(o.createdAt) ? new Date(ts(o.createdAt)).toLocaleString() : '';
+      const total = o.amountPaid ?? o.totalAmount ?? o.price ?? 0;
+      return `<div class="card">
+        <div class="rhead"><b>Order #${esc(String(o.id).slice(0, 8))}</b><span class="chip ${esc(st)}">${esc(OLABEL[st] || st)}</span></div>
+        <div class="rmeta">Client: ${esc(o.userEmail || uName(o.userId))}<br>Placed: ${esc(when)}<br>
+          Items: ${items.map(i => esc((i.quantity || 1) + ' x ' + (i.name || 'Item'))).join(', ') || '—'}<br>
+          Method: ${esc(o.deliveryMethod || o.shippingMethod || '—')}<br>Deliver to: ${esc(o.deliveryAddress || o.shippingAddress || '—')}
+          ${o.creditUsed > 0 ? `<br>Loyalty credit used: ${money(o.creditUsed)}` : ''}</div>
+        <div class="rsum"><div class="tot"><span>Paid</span><span>${money(total)}</span></div></div>
+        ${o.trackingNumber ? `<div class="rnote">${esc(o.courier || 'Courier')} tracking: <b>${esc(o.trackingNumber)}</b></div>` : ''}
+        <div class="ract"><button onclick="openOrder('${o.id}')">Update status / tracking</button></div>
+      </div>`;
+    }
+
+    function renderOrders() {
+      const os = [...orders].sort((a, b) => ts(b.createdAt) - ts(a.createdAt));
+      const tabs = { new: 'To ship', shipped: 'On the way', delivered: 'Delivered', other: 'Cancelled', all: 'All' };
+      const count = k => k === 'all' ? os.length : os.filter(o => oGroup(oNorm(o.status)) === k).length;
+      $('orderTabs').innerHTML = Object.entries(tabs).map(([k, v]) =>
+        `<button class="${k === orderTab ? 'on' : ''}" onclick="setOrderTab('${k}')">${v} (${count(k)})</button>`).join('');
+      const n = count('new');
+      $('orderBadge').textContent = n; $('orderBadge').classList.toggle('hide', !n);
+      const list = orderTab === 'all' ? os : os.filter(o => oGroup(oNorm(o.status)) === orderTab);
+      $('orderList').innerHTML = list.length ? list.map(orderCard).join('') : '<div class="card empty">No orders here.</div>';
+    }
+
+    window.openOrder = id => {
+      const o = orders.find(x => x.id === id); if (!o) return;
+      editOrder = o;
+      $('orderInfo').textContent = 'Order #' + String(o.id).slice(0, 8) + ' · ' + (o.userEmail || '');
+      const st = oNorm(o.status); $('oStatus').value = [...$('oStatus').options].some(x => x.value === st) ? st : 'confirmed';
+      $('oCourier').value = o.courier || 'The Courier Guy';
+      $('oTracking').value = o.trackingNumber || '';
+      $('oLink').value = o.trackingUrl || '';
+      $('oErr').textContent = '';
+      $('orderModal').classList.remove('hide');
+    };
+    $('oCancel').onclick = () => $('orderModal').classList.add('hide');
+    $('oSave').onclick = async () => {
+      const o = editOrder, status = $('oStatus').value, tracking = $('oTracking').value.trim();
+      if (status === 'shipped' && !tracking && !confirm('No tracking number entered. Save anyway?')) return;
+      $('oSave').disabled = true;
+      try {
+        await db.collection(COL.orders).doc(o.id).update({
+          status, courier: $('oCourier').value.trim(), trackingNumber: tracking,
+          trackingUrl: $('oLink').value.trim(), statusUpdatedAt: FV.serverTimestamp()
+        });
+        if (oNorm(o.status) !== status && o.userId) {
+          const msgs = {
+            shipped: 'Your order has been shipped.' + (tracking ? ' Tracking number: ' + tracking : ''),
+            out_for_delivery: 'Your order is out for delivery.',
+            ready_for_collection: 'Your order is ready for collection.',
+            delivered: 'Your order has been delivered. Thank you!',
+            cancelled: 'Your order was cancelled.'
+          };
+          if (msgs[status]) await notifyClient(o.userId, 'Order ' + (OLABEL[status] || status).toLowerCase(), msgs[status]).catch(console.error);
+        }
+        $('orderModal').classList.add('hide');
+      } catch (e) { $('oErr').textContent = e.message; }
+      $('oSave').disabled = false;
+    };
+
+    // ---- PUDO lockers: find the nearest one to the owner ----
+    // Locker list: The Courier Guy / PUDO public locker data. If the browser cannot load it
+    // (network or CORS), put a copy of that data in a file called lockers.json next to this page.
+    const LOCKER_URL = 'https://api-tcg.co.za/lockers-data';
+    let lkMap = null, lkMarkers = [], lkYou = null, lkData = null, lkPos = null;
+
+    const kmBetween = (a, b, c, d) => {
+      const r = x => x * Math.PI / 180, R = 6371;
+      const h = Math.sin(r(c - a) / 2) ** 2 + Math.cos(r(a)) * Math.cos(r(c)) * Math.sin(r(d - b) / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    };
+    async function loadLockerData() {
+      if (lkData) return lkData;
+      let raw = null;
+      try { raw = JSON.parse(localStorage.getItem('kk_lockers') || 'null'); } catch (e) {}
+      const tryUrl = async url => { const r = await fetch(url); if (!r.ok) throw new Error(r.status); return r.json(); };
+      for (const url of [LOCKER_URL, 'lockers.json']) {
+        try { raw = await tryUrl(url); try { localStorage.setItem('kk_lockers', JSON.stringify(raw)); } catch (e) {} break; } catch (e) { console.warn('Lockers:', url, e); }
+      }
+      if (!raw) throw new Error('Could not load the locker list.');
+      const arr = Array.isArray(raw) ? raw : (raw.data || raw.lockers || raw.results || []);
+      lkData = arr.map(x => ({
+        code: x.code, name: x.name, address: x.address || '',
+        lat: parseFloat(x.latitude ?? x.lat), lng: parseFloat(x.longitude ?? x.lng ?? x.lon),
+        town: x.place?.town || '', type: x.type?.name || '', hours: x.openinghours || []
+      })).filter(l => isFinite(l.lat) && isFinite(l.lng));
+      return lkData;
+    }
+    // Fallback when the official list cannot be loaded: parcel lockers mapped on OpenStreetMap (free, no key).
+    async function loadOsmLockers(lat, lng) {
+      const q = `[out:json][timeout:25];nwr["amenity"="parcel_locker"](around:40000,${lat},${lng});out center 300;`;
+      const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(q) });
+      if (!r.ok) throw new Error('OpenStreetMap lookup failed (' + r.status + ')');
+      const els = (await r.json()).elements || [];
+      const all = els.map(e => {
+        const g = e.tags || {};
+        const label = [g.operator, g.brand, g.name, g.network].filter(Boolean).join(' ');
+        return { code: g.ref || ('OSM-' + e.id), name: g.name || g.operator || g.brand || 'Parcel locker',
+          address: [g['addr:housenumber'], g['addr:street'], g['addr:suburb'] || g['addr:city']].filter(Boolean).join(' ') || (g.description || ''),
+          lat: e.lat ?? e.center?.lat, lng: e.lon ?? e.center?.lon, town: '', type: 'Parcel locker (OpenStreetMap)', hours: [],
+          pudo: /pudo|courier\s*guy|tcg/i.test(label) };
+      }).filter(l => isFinite(l.lat) && isFinite(l.lng));
+      const pudo = all.filter(l => l.pudo);
+      return pudo.length ? { list: pudo, note: 'PUDO / Courier Guy lockers from OpenStreetMap' }
+        : { list: all, note: 'Parcel lockers from OpenStreetMap (could not confirm which are PUDO)' };
+    }
+    const todayHours = l => {
+      const d = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+      const h = (l.hours || []).find(x => String(x.day || '').toLowerCase().startsWith(d.slice(0, 3)));
+      return h ? (h.open_time && h.close_time ? `${String(h.open_time).slice(0, 5)} - ${String(h.close_time).slice(0, 5)}` : 'Closed today') : '';
+    };
+    async function initLockers() {
+      if (!lkMap) {
+        lkMap = L.map('lkMap').setView([-26.2, 28.05], 9);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(lkMap);
+        try { const s = JSON.parse(localStorage.getItem('kk_owner_loc') || 'null'); if (s) { $('lkAddr').value = s.label || ''; showNearest(s.lat, s.lng); } } catch (e) {}
+      }
+      setTimeout(() => lkMap.invalidateSize(), 50);
+    }
+    async function showNearest(lat, lng, label) {
+      lkPos = { lat, lng, label: label || $('lkAddr').value };
+      $('lkStatus').textContent = 'Loading lockers...';
+      let data, note = '';
+      try { data = await loadLockerData(); note = 'Official PUDO list'; } catch (e) {
+        try {
+          $('lkStatus').textContent = 'Official list unavailable. Searching OpenStreetMap...';
+          const o = await loadOsmLockers(lat, lng); data = o.list; note = o.note;
+        } catch (e2) {
+          $('lkStatus').textContent = 'Could not load any locker list (' + e2.message + '). See the note at the bottom of this page.'; return;
+        }
+      }
+      if (!data.length) { $('lkStatus').textContent = 'No lockers found near this location in the data available. Use the official PUDO locker finder linked below.'; return; }
+      lkMarkers.forEach(m => m.remove()); lkMarkers = [];
+      if (lkYou) lkYou.remove();
+      lkYou = L.circleMarker([lat, lng], { radius: 9, color: '#E91E63', fillColor: '#E91E63', fillOpacity: .9 }).addTo(lkMap).bindPopup('You are here');
+      const near = data.map(l => ({ ...l, km: kmBetween(lat, lng, l.lat, l.lng) })).sort((a, b) => a.km - b.km).slice(0, 10);
+      $('lkStatus').textContent = 'Showing the ' + near.length + ' closest of ' + data.length + ' lockers. Source: ' + note + '.';
+      $('lkList').innerHTML = near.map((l, i) => `<div class="lki" data-i="${i}">
+        <span class="km">${l.km.toFixed(1)} km</span><b>${esc(l.name || l.code)}</b>
+        <small>${esc(l.address)}${l.town ? ', ' + esc(l.town) : ''}<br>Code: <b style="display:inline">${esc(l.code)}</b>${l.type ? ' · ' + esc(l.type) : ''}${todayHours(l) ? '<br>Today: ' + esc(todayHours(l)) : ''}</small></div>`).join('');
+      near.forEach((l, i) => {
+        const m = L.marker([l.lat, l.lng]).addTo(lkMap)
+          .bindPopup(`<b>${esc(l.name || l.code)}</b><br>${esc(l.address)}<br>Code: ${esc(l.code)}<br>${l.km.toFixed(1)} km away`);
+        m.on('click', () => document.querySelectorAll('.lki').forEach(e => e.classList.toggle('on', +e.dataset.i === i)));
+        lkMarkers.push(m);
+      });
+      document.querySelectorAll('.lki').forEach(e => e.onclick = () => {
+        const i = +e.dataset.i; lkMap.setView([near[i].lat, near[i].lng], 16); lkMarkers[i].openPopup();
+        document.querySelectorAll('.lki').forEach(x => x.classList.toggle('on', x === e));
+      });
+      lkMap.fitBounds(L.latLngBounds([[lat, lng], ...near.slice(0, 5).map(l => [l.lat, l.lng])]).pad(.2));
+    }
+    $('lkSearch').onclick = async () => {
+      const q = $('lkAddr').value.trim(); if (!q) return;
+      $('lkStatus').textContent = 'Finding your address...';
+      try {
+        const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=za&q=' + encodeURIComponent(q));
+        const j = await r.json();
+        if (!j.length) { $('lkStatus').textContent = 'Address not found. Try adding the suburb and city.'; return; }
+        showNearest(parseFloat(j[0].lat), parseFloat(j[0].lon), q);
+      } catch (e) { $('lkStatus').textContent = 'Could not look up that address: ' + e.message; }
+    };
+    $('lkAddr').onkeydown = e => { if (e.key === 'Enter') $('lkSearch').click(); };
+    $('lkGps').onclick = () => {
+      if (!navigator.geolocation) { $('lkStatus').textContent = 'Your browser cannot share its location.'; return; }
+      $('lkStatus').textContent = 'Getting your location...';
+      navigator.geolocation.getCurrentPosition(
+        p => { $('lkAddr').value = 'My current location'; showNearest(p.coords.latitude, p.coords.longitude, 'My current location'); },
+        () => { $('lkStatus').textContent = 'Location was blocked. Type your address instead.'; });
+    };
+    $('lkSave').onclick = () => {
+      if (!lkPos) { $('lkStatus').textContent = 'Search for a location first.'; return; }
+      try { localStorage.setItem('kk_owner_loc', JSON.stringify(lkPos)); $('lkStatus').textContent = 'Saved. This will open automatically next time.'; } catch (e) {}
+    };
+
+    // ---- Promotions: send emails through the owner's own Gmail (Gmail API, free) ----
+    const GSCOPE = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly';
+    let gToken = null, gExpiry = 0, prStop = false, prBusy = false;
+    const gClient = () => { try { return localStorage.getItem('kk_gclient') || ''; } catch (e) { return ''; } };
+    // Only clients who switched Promotional Alerts ON (the app defaults to OFF) and did not turn email off.
+    const promoRecipients = () => users
+      .filter(u => u.prefs && u.prefs.promotions === true && u.prefs.email !== false && uEmail(u))
+      .map(u => ({ id: u.id, email: uEmail(u), name: uFullName(u) }));
+
+    function renderPromo() {
+      if (!$('prStats')) return;
+      const n = promoRecipients().length, optedOut = users.length - n;
+      $('prStats').innerHTML = `<span><b>${n}</b> client${n === 1 ? '' : 's'} will receive it</span><span>${optedOut} not opted in</span>`;
+      if (!$('prClient').value) $('prClient').value = gClient();
+    }
+    $('prSaveClient').onclick = () => {
+      try { localStorage.setItem('kk_gclient', $('prClient').value.trim()); } catch (e) {}
+      $('prMsg').textContent = 'Saved.';
+    };
+    const prSay = (m, bad) => { $('prMsg').textContent = m; $('prMsg').style.color = bad ? '#d32f2f' : 'var(--tx)'; };
+
+    function getGmailToken() {
+      return new Promise((resolve, reject) => {
+        if (gToken && Date.now() < gExpiry - 30000) return resolve(gToken);
+        if (!gClient()) return reject(new Error('Paste your Google Client ID in the setup box and press Save first.'));
+        if (!window.google || !google.accounts) return reject(new Error('Google sign-in did not load. Check your internet connection and refresh.'));
+        google.accounts.oauth2.initTokenClient({
+          client_id: gClient(), scope: GSCOPE, hint: 'kottonkandybeautybar4@gmail.com',
+          callback: r => {
+            if (r.error) return reject(new Error('Google sign-in failed: ' + (r.error_description || r.error)));
+            gToken = r.access_token; gExpiry = Date.now() + (r.expires_in || 3600) * 1000; resolve(gToken);
+          },
+          error_callback: e => reject(new Error('Google sign-in was closed or blocked (' + (e.type || 'error') + ').'))
+        }).requestAccessToken();
+      });
+    }
+    const b64 = s => btoa(unescape(encodeURIComponent(s)));
+    const b64url = s => b64(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    function buildRaw(to, subject, html) {
+      const body = b64(html).replace(/(.{76})/g, '$1\r\n');
+      return b64url(['To: ' + to, 'Subject: =?UTF-8?B?' + b64(subject) + '?=', 'MIME-Version: 1.0',
+        'Content-Type: text/html; charset="UTF-8"', 'Content-Transfer-Encoding: base64', '', body].join('\r\n'));
+    }
+    const emailHtml = (name, text) => `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#222;line-height:1.6">
+      <h2 style="color:#6B3A82;margin-bottom:4px">Kotton Kandy</h2>
+      <p>Hi ${esc(name || 'there')},</p><p>${esc(text).replace(/\n/g, '<br>')}</p>
+      <hr style="border:none;border-top:1px solid #eee;margin:24px 0 10px">
+      <p style="font-size:12px;color:#888">You are receiving this because you turned on Promotional Alerts in the Kotton Kandy app. To stop receiving these emails, open Settings in the app and switch off Promotional Alerts.</p></div>`;
+    async function gmailSend(to, subject, html) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const token = await getGmailToken();
+        const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+          method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ raw: buildRaw(to, subject, html) })
+        });
+        if (r.status === 401 && attempt === 0) { gToken = null; continue; }
+        if (!r.ok) { let m = r.status; try { m = (await r.json()).error.message; } catch (e) {} throw new Error(m); }
+        return;
+      }
+    }
+    function promoInputs() {
+      const subject = $('prSubject').value.trim(), text = $('prBody').value.trim();
+      if (!subject || !text) { prSay('Please write a subject and a message.', true); return null; }
+      return { subject, text };
+    }
+    $('prTest').onclick = async () => {
+      const p = promoInputs(); if (!p) return;
+      try {
+        const token = await getGmailToken();
+        const me = await (await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', { headers: { Authorization: 'Bearer ' + token } })).json();
+        if (!me.emailAddress) throw new Error('Could not read your Gmail address.');
+        await gmailSend(me.emailAddress, '[TEST] ' + p.subject, emailHtml('there', p.text));
+        prSay('Test sent to ' + me.emailAddress + '. Check your inbox.');
+      } catch (e) { prSay(e.message, true); }
+    };
+    $('prCopy').onclick = e => {
+      const list = promoRecipients().map(r => r.email).join(', ');
+      if (!list) return prSay('No opted-in clients yet.', true);
+      copyText(list, e.target);
+    };
+    $('prStop').onclick = () => { prStop = true; };
+    $('prSend').onclick = async () => {
+      if (prBusy) return;
+      const p = promoInputs(); if (!p) return;
+      const rs = promoRecipients();
+      if (!rs.length) return prSay('No clients have opted in to promotions yet, so there is nobody to send to.', true);
+      if (rs.length > 450) return prSay('That is more than Gmail allows in a day (about 500). Send in smaller batches.', true);
+      if (!confirm('Send this email to ' + rs.length + ' client' + (rs.length === 1 ? '' : 's') + '? This cannot be undone.')) return;
+      prBusy = true; prStop = false; $('prSend').disabled = true; $('prStop').classList.remove('hide'); $('prBarWrap').classList.remove('hide');
+      let ok = 0, fail = 0, lastErr = '';
+      try { await getGmailToken(); } catch (e) { prSay(e.message, true); prBusy = false; $('prSend').disabled = false; $('prStop').classList.add('hide'); return; }
+      for (let i = 0; i < rs.length && !prStop; i++) {
+        try { await gmailSend(rs[i].email, p.subject, emailHtml(rs[i].name, p.text)); ok++; }
+        catch (e) { fail++; lastErr = e.message; if (/quota|limit|rate/i.test(e.message)) break; }
+        $('prBar').style.width = Math.round((i + 1) / rs.length * 100) + '%';
+        prSay(`Sending... ${ok} sent, ${fail} failed`);
+        await new Promise(r => setTimeout(r, 700));
+      }
+      if ($('prInApp').checked && ok > 0) {
+        try {
+          for (let i = 0; i < rs.length; i += 400) {
+            const b = db.batch();
+            rs.slice(i, i + 400).forEach(r => b.set(db.collection(COL.notifications).doc(), { userId: r.id, type: 'promotion', title: p.subject, message: p.text, body: p.text, read: false, createdAt: FV.serverTimestamp() }));
+            await b.commit();
+          }
+        } catch (e) { lastErr = 'In-app notifications failed: ' + e.message; }
+      }
+      prSay(`${prStop ? 'Stopped. ' : 'Done. '}${ok} email${ok === 1 ? '' : 's'} sent${fail ? ', ' + fail + ' failed (' + lastErr + ')' : ''}.`, fail > 0);
+      prBusy = false; $('prSend').disabled = false; $('prStop').classList.add('hide');
+    };
 
     // ---- Chat ----
     async function markRead(id, list) {
@@ -276,8 +994,19 @@
     // ---- Bookings: change status and notify the client ----
     window.setStatus = async (id, status) => {
       try {
-        await db.collection(COL.bookings).doc(id).update({ status });
         const b = bookings.find(x => x.id === id);
+        const needsRefund = status === 'cancelled' && b && b.paymentStatus === 'paid' && !refunds.some(r => r.id === id);
+        if (needsRefund && !confirm('This booking has been paid. Cancelling it means the client is refunded in full. Continue?')) { render(); return; }
+        await db.collection(COL.bookings).doc(id).update({ status });
+        if (needsRefund) {
+          await db.collection(COL.refunds).doc(id).set({
+            appointmentId: id, userId: b.userId || '', userEmail: bWho(b), serviceName: bName(b),
+            appointmentDateText: bDate(b) + ' ' + bTime(b), total: Number(b.amountPaid ?? bPrice(b)), reason: 'ownerCancelled', note: '',
+            fee: 0, refundAmount: Number(b.amountPaid ?? bPrice(b)), status: 'approved',
+            adminReason: 'Your appointment was cancelled by the salon. You will receive a full refund.',
+            refundSent: false, createdAt: FV.serverTimestamp(), decidedAt: FV.serverTimestamp()
+          });
+        }
         if (b && b.userId) {
           const msg = `Your ${bName(b)} booking is now ${status}.`;
           await db.collection(COL.notifications).add({ userId: b.userId, title: 'Booking ' + status, message: msg, body: msg, read: false, createdAt: FV.serverTimestamp() });

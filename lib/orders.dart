@@ -1,6 +1,11 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'marketplace.dart';
 
 // ---------------------------------------------------------------------------
 // Helpers: safely read Firestore values no matter how they were saved
@@ -42,11 +47,200 @@ List<QueryDocumentSnapshot> _sortNewestFirst(List<QueryDocumentSnapshot> docs) {
   return list;
 }
 
+
+// ---------------------------------------------------------------------------
+// Order tracking helpers
+// ---------------------------------------------------------------------------
+
+String _normStatus(String s) => s.toLowerCase().trim().replaceAll(RegExp(r'[\s-]+'), '_');
+
+/// -1 = cancelled/failed, 0 = confirmed, 1 = shipped, 2 = out for delivery
+/// (or ready for collection), 3 = delivered.
+int _orderStep(String rawStatus) {
+  final s = _normStatus(rawStatus);
+  if (s.contains('cancel') || s.contains('fail') || s == 'refunded') return -1;
+  switch (s) {
+    case 'shipped':
+    case 'dispatched':
+    case 'in_transit':
+      return 1;
+    case 'out_for_delivery':
+    case 'ready_for_collection':
+      return 2;
+    case 'delivered':
+    case 'collected':
+    case 'completed':
+      return 3;
+    default:
+      return 0; // pending, paid, confirmed, processing ...
+  }
+}
+
+String _friendlyStatus(String rawStatus) {
+  final s = _normStatus(rawStatus);
+  switch (_orderStep(rawStatus)) {
+    case -1:
+      return s.contains('fail') ? 'Payment failed' : 'Cancelled';
+    case 1:
+      return 'Shipped';
+    case 2:
+      return s == 'ready_for_collection' ? 'Ready for collection' : 'Out for delivery';
+    case 3:
+      return 'Delivered';
+    default:
+      return s == 'pending' ? 'Pending' : 'Confirmed';
+  }
+}
+
+Color _statusColor(int step) {
+  if (step == -1) return Colors.red;
+  if (step == 3) return Colors.green.shade600;
+  return OrdersScreen.primaryPurple;
+}
+
+/// Confirmed -> Shipped -> Out for delivery -> Delivered
+class _OrderTracker extends StatelessWidget {
+  final int step;
+  final bool collection;
+  const _OrderTracker({required this.step, required this.collection});
+
+  @override
+  Widget build(BuildContext context) {
+    final labels = ['Confirmed', 'Shipped', collection ? 'Ready for collection' : 'Out for delivery', 'Delivered'];
+    const purple = OrdersScreen.primaryPurple;
+    final grey = Colors.grey.shade300;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: List.generate(4, (i) {
+        final bool done = i <= step;
+        return Expanded(
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(height: 3, color: i == 0 ? Colors.transparent : (i <= step ? purple : grey)),
+                  ),
+                  CircleAvatar(
+                    radius: 11,
+                    backgroundColor: done ? purple : grey,
+                    child: Icon(done ? Icons.check : Icons.circle, size: done ? 14 : 6, color: Colors.white),
+                  ),
+                  Expanded(
+                    child: Container(height: 3, color: i == 3 ? Colors.transparent : (i < step ? purple : grey)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                labels[i],
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: i == step ? FontWeight.bold : FontWeight.normal,
+                  color: done ? Colors.black87 : Colors.grey,
+                ),
+              ),
+            ],
+          ),
+        );
+      }),
+    );
+  }
+}
+
+/// Courier name + tracking number (with copy buttons), or a "coming soon" note.
+class _TrackingInfo extends StatelessWidget {
+  final int step;
+  final String courier;
+  final String trackingNumber;
+  final String trackingUrl;
+  final bool collection;
+
+  const _TrackingInfo({
+    required this.step,
+    required this.courier,
+    required this.trackingNumber,
+    required this.trackingUrl,
+    required this.collection,
+  });
+
+  void _copy(BuildContext context, String text, String what) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$what copied'), duration: const Duration(seconds: 2)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (trackingNumber.isNotEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: OrdersScreen.lightPurple,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.local_shipping_outlined, size: 18, color: OrdersScreen.primaryPurple),
+                const SizedBox(width: 6),
+                Text(courier.isEmpty ? 'Courier' : courier,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Text('Tracking number', style: TextStyle(fontSize: 11, color: Colors.grey)),
+            Row(
+              children: [
+                Expanded(
+                  child: SelectableText(trackingNumber,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 0.5)),
+                ),
+                IconButton(
+                  tooltip: 'Copy tracking number',
+                  icon: const Icon(Icons.copy, size: 18),
+                  onPressed: () => _copy(context, trackingNumber, 'Tracking number'),
+                ),
+              ],
+            ),
+            if (trackingUrl.isNotEmpty)
+              TextButton.icon(
+                style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
+                icon: const Icon(Icons.link, size: 18),
+                label: const Text('Copy tracking link'),
+                onPressed: () => _copy(context, trackingUrl, 'Tracking link'),
+              ),
+          ],
+        ),
+      );
+    }
+
+    String message;
+    if (step == 3) {
+      message = collection ? 'Your order has been collected. Thank you!' : 'Your order has been delivered. Thank you!';
+    } else if (step == 0) {
+      message = 'We are getting your order ready. Your tracking number will appear here once it ships.';
+    } else {
+      message = 'Your tracking number will appear here shortly.';
+    }
+    return Text(message, style: const TextStyle(fontSize: 12, color: Colors.grey));
+  }
+}
+
 class OrdersScreen extends StatefulWidget {
   static const Color primaryPurple = Color(0xFF6B3A82);
   static const Color lightPurple = Color(0xFFF3EAF6);
 
-  const OrdersScreen({super.key});
+  /// 0 = Appointments tab, 1 = Orders tab.
+  final int initialTab;
+
+  const OrdersScreen({super.key, this.initialTab = 0});
 
   @override
   State<OrdersScreen> createState() => _OrdersScreenState();
@@ -58,7 +252,11 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTab.clamp(0, 1),
+    );
   }
 
   @override
@@ -67,10 +265,27 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
+  /// Goes back to the previous screen, or to the marketplace if there isn't one.
+  void _goBack() {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+    } else {
+      navigator.pushReplacement(
+        MaterialPageRoute(builder: (_) => const MarketplaceScreen()),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: _goBack,
+        ),
         title: const Text(
           "My Bookings & Orders",
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
@@ -120,203 +335,14 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   }
 }
 
+// ---------------------------------------------------------------------------
+// APPOINTMENTS TAB (display only: rescheduling and refunds live on the Refunds page)
+// ---------------------------------------------------------------------------
+
 class _AppointmentsView extends StatelessWidget {
   final User currentUser;
 
   const _AppointmentsView({required this.currentUser});
-
-  Future<void> _deleteAppointment(BuildContext context, String docId) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Delete Booking"),
-        content: const Text("Are you sure you want to delete this appointment?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await FirebaseFirestore.instance.collection('appointments').doc(docId).delete();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Booking deleted successfully.")),
-        );
-      }
-    }
-  }
-
-  Future<void> _rescheduleAppointment(
-      BuildContext context,
-      String docId,
-      String oldDate,
-      String oldTime,
-      String currentServiceName,
-      ) async {
-    final List<String> availableServices = [
-      'Press-on Plain',
-      'Press-on Glam',
-      'Press-on Installation',
-      'Cluster Lashes',
-      'Classic Lashes',
-      'Volume Lashes',
-      'Afro Crotchet',
-      'Knotless / Box Braids',
-      'Wig Installation',
-      'Soft Glam',
-      'Full Glam',
-    ];
-
-    final List<String> availableTimeSlots = [
-      '08:00 AM',
-      '09:30 AM',
-      '11:00 AM',
-      '01:00 PM',
-      '02:30 PM',
-      '07:00 PM',
-      '09:00 PM',
-    ];
-
-    DateTime? selectedDate;
-    String? selectedTime = availableTimeSlots.contains(oldTime) ? oldTime : availableTimeSlots.first;
-    String selectedService = availableServices.contains(currentServiceName) ? currentServiceName : availableServices.first;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Reschedule Appointment",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text("Service Type", style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<String>(
-                    value: selectedService,
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                    items: availableServices.map((service) {
-                      return DropdownMenuItem(value: service, child: Text(service));
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) setModalState(() => selectedService = val);
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  const Text("Appointment Date", style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  InkWell(
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: DateTime.now().add(const Duration(days: 1)),
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 60)),
-                      );
-                      if (picked != null) {
-                        setModalState(() => selectedDate = picked);
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade400),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            selectedDate == null
-                                ? "Current: $oldDate"
-                                : "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}",
-                            style: const TextStyle(fontSize: 15),
-                          ),
-                          const Icon(Icons.calendar_today, color: OrdersScreen.primaryPurple),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text("Time Slot", style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<String>(
-                    value: selectedTime,
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                    items: availableTimeSlots.map((slot) {
-                      return DropdownMenuItem(value: slot, child: Text(slot));
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) setModalState(() => selectedTime = val);
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: OrdersScreen.primaryPurple,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () async {
-                        final String newDateStr = selectedDate == null
-                            ? oldDate
-                            : "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}";
-                        final String newTimeStr = selectedTime ?? oldTime;
-
-                        await FirebaseFirestore.instance.collection('appointments').doc(docId).update({
-                          'serviceName': selectedService,
-                          'date': newDateStr,
-                          'timeSlot': newTimeStr,
-                          'status': 'rescheduled',
-                        });
-
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Rescheduled $selectedService to $newDateStr at $newTimeStr")),
-                          );
-                        }
-                      },
-                      child: const Text('Confirm Reschedule', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -358,11 +384,22 @@ class _AppointmentsView extends StatelessWidget {
               final String serviceName = (data['serviceName'] ?? 'Service').toString();
               final String customerEmail = (data['userEmail'] ?? currentUser.email ?? 'N/A').toString();
 
+              final bool wasRescheduled = data['rescheduled'] == true;
+              final String previousDate = _toDateString(data['previousDate']);
+              final String previousTime = (data['previousTimeSlot'] ?? '').toString();
+
               final dynamic refRaw = data['referencePhoto'] ??
                   data['referenceImageUrl'] ??
                   data['referenceImage'] ??
                   data['imageUrl'];
               final String? referenceImageUrl = refRaw is String ? refRaw : null;
+              Uint8List? referenceBytes;
+              if (data['referencePhotoData'] is String) {
+                try {
+                  referenceBytes = base64Decode(data['referencePhotoData'] as String);
+                } catch (_) {}
+              }
+              final bool hasReference = (referenceImageUrl != null && referenceImageUrl.isNotEmpty) || referenceBytes != null;
 
               final bool isFailed = statusUpper.contains('FAIL') || statusUpper.contains('CANCEL');
 
@@ -414,8 +451,16 @@ class _AppointmentsView extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text("Customer: $customerEmail", style: const TextStyle(fontSize: 12)),
+                    if (wasRescheduled)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          "Rescheduled from $previousDate${previousTime.isEmpty ? '' : ' at $previousTime'}",
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
 
-                    if (referenceImageUrl != null && referenceImageUrl.isNotEmpty) ...[
+                    if (hasReference) ...[
                       const SizedBox(height: 12),
                       const Text(
                         "Reference Style Picture:",
@@ -424,8 +469,15 @@ class _AppointmentsView extends StatelessWidget {
                       const SizedBox(height: 6),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          referenceImageUrl,
+                        child: referenceBytes != null
+                            ? Image.memory(
+                          referenceBytes,
+                          height: 140,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        )
+                            : Image.network(
+                          referenceImageUrl!,
                           height: 140,
                           width: double.infinity,
                           fit: BoxFit.cover,
@@ -437,39 +489,6 @@ class _AppointmentsView extends StatelessWidget {
                         ),
                       ),
                     ],
-
-                    const SizedBox(height: 16),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: () => _deleteAppointment(context, doc.id),
-                          icon: const Icon(Icons.delete, size: 16, color: Colors.red),
-                          label: const Text("Delete", style: TextStyle(color: Colors.red)),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.red),
-                            minimumSize: const Size(0, 40),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton.icon(
-                          onPressed: () => _rescheduleAppointment(
-                            context,
-                            doc.id,
-                            date,
-                            timeSlot,
-                            serviceName,
-                          ),
-                          icon: const Icon(Icons.edit_calendar, size: 16, color: Colors.white),
-                          label: const Text("Reschedule", style: TextStyle(color: Colors.white)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: OrdersScreen.primaryPurple,
-                            minimumSize: const Size(0, 40),
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               );
@@ -488,6 +507,10 @@ class _AppointmentsView extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// ORDERS TAB
+// ---------------------------------------------------------------------------
 
 class _OrdersView extends StatelessWidget {
   final User currentUser;
@@ -533,7 +556,15 @@ class _OrdersView extends StatelessWidget {
               final List<dynamic> items = data['items'] is List ? data['items'] as List<dynamic> : [];
               final String customerEmail = (data['userEmail'] ?? currentUser.email ?? 'N/A').toString();
 
-              final bool isFailed = statusUpper.contains('FAIL') || statusUpper.contains('CANCEL');
+              final int step = _orderStep(rawStatus);
+              final bool collection = _normStatus(rawStatus) == 'ready_for_collection' ||
+                  (data['deliveryMethod'] ?? data['shippingMethod'] ?? '').toString().toLowerCase().contains('kiosk') ||
+                  (data['deliveryMethod'] ?? data['shippingMethod'] ?? '').toString().toLowerCase().contains('collect');
+              final String courier = (data['courier'] ?? 'The Courier Guy').toString();
+              final String trackingNumber = (data['trackingNumber'] ?? '').toString().trim();
+              final String trackingUrl = (data['trackingUrl'] ?? '').toString().trim();
+              final double creditUsed = _toDouble(data['creditUsed']);
+              final double amountPaid = data['amountPaid'] != null ? _toDouble(data['amountPaid']) : totalAmount;
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 16),
@@ -544,7 +575,7 @@ class _OrdersView extends StatelessWidget {
                   border: Border.all(color: Colors.grey.shade200),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -574,14 +605,26 @@ class _OrdersView extends StatelessWidget {
                         ),
                         Chip(
                           label: Text(
-                            statusUpper,
+                            _friendlyStatus(rawStatus).toUpperCase(),
                             style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                           ),
-                          backgroundColor: isFailed ? Colors.red : OrdersScreen.primaryPurple,
+                          backgroundColor: _statusColor(step),
                         ),
                       ],
                     ),
                     const Divider(height: 20),
+                    if (step >= 0) ...[
+                      _OrderTracker(step: step, collection: collection),
+                      const SizedBox(height: 14),
+                      _TrackingInfo(
+                        step: step,
+                        courier: courier,
+                        trackingNumber: trackingNumber,
+                        trackingUrl: trackingUrl,
+                        collection: collection,
+                      ),
+                      const Divider(height: 24),
+                    ],
                     if (items.isNotEmpty) ...[
                       const Text(
                         "Items Ordered",
@@ -640,6 +683,17 @@ class _OrdersView extends StatelessWidget {
                       ),
                       const Divider(height: 20),
                     ],
+                    if (creditUsed > 0) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("Loyalty credit used", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          Text("-R${creditUsed.toStringAsFixed(2)}",
+                              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                    ],
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -648,7 +702,7 @@ class _OrdersView extends StatelessWidget {
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         Text(
-                          "R${totalAmount.toStringAsFixed(2)}",
+                          "R${amountPaid.toStringAsFixed(2)}",
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,

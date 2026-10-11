@@ -35,6 +35,11 @@ dependencies:
   mobile_scanner: ^5.1.1
   shared_preferences: ^2.5.3
   paystack_flutter_sdk: ^0.0.1-alpha.2
+  provider: ^6.1.5+1
+  firebase_messaging: ^16.7.0
+  flutter_local_notifications: ^22.3.1
+  url_launcher: ^6.3.3
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:

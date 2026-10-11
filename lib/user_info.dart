@@ -68,9 +68,24 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
         _nameController.text = doc.data()?['name'] ?? user.displayName ?? '';
         _phoneController.text = doc.data()?['phone'] ?? '';
         _profileImageUrl = doc.data()?['photoUrl'] ?? user.photoURL;
+      } else {
+        _nameController.text = user.displayName ?? '';
+      }
+
+      // Keep the profile the salon owner sees complete: save the name and email on the
+      // user's profile (they were missing, so the admin Users page showed blanks).
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'uid': user.uid,
+          'email': user.email ?? '',
+          if (_nameController.text.trim().isNotEmpty) 'name': _nameController.text.trim(),
+          if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) 'photoUrl': _profileImageUrl,
+        }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('Could not sync profile: $e');
       }
     }
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<String?> _uploadImageToCloudinary(File imageFile) async {
@@ -149,6 +164,8 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
       if (user != null) {
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
           'phone': _phoneController.text.trim(),
+          'email': user.email ?? '',
+          if (_nameController.text.trim().isNotEmpty) 'name': _nameController.text.trim(),
         }, SetOptions(merge: true));
 
         if (mounted) {
