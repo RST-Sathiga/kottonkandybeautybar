@@ -392,6 +392,15 @@
     // ---- Helpers (match the app's field names) ----
     const ALL_STATUS = ['pending', 'confirmed', 'paid', 'completed', 'cancelled', 'failed'];
     const ts = x => x?.toMillis ? x.toMillis() : (x ? new Date(x).getTime() || 0 : 0);
+    // Everyone who has a profile, PLUS anyone who has a booking, order or chat but no profile yet.
+    const allUsers = () => {
+      const list = [...users], have = new Set(users.map(u => u.id));
+      const add = (id, extra) => { if (id && !have.has(id)) { have.add(id); list.push({ id, noProfile: true, ...extra }); } };
+      bookings.forEach(b => add(b.userId, { email: b.userEmail || b.email || '' }));
+      orders.forEach(o => add(o.userId, { email: o.userEmail || '' }));
+      chats.forEach(c => add(c.clientId, { name: c.clientName || '' }));
+      return list;
+    };
     const uName = id => { const u = users.find(x => x.id === id); return u ? (u.name || u.email || id) : (id || '—'); };
     const bDate = b => b.date?.toDate ? b.date.toDate().toLocaleDateString() : (b.date || '');
     const bTime = b => b.timeSlot || b.time || (b.date?.toDate ? b.date.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
@@ -444,7 +453,7 @@
       return 'pending';
     };
     window.openUser = id => {
-      const u = users.find(x => x.id === id); if (!u) return;
+      const u = allUsers().find(x => x.id === id); if (!u) return;
       const name = uFullName(u) || 'No name saved';
       const ub = bookings.filter(b => b.userId === id).sort((a, b) => ts(b.createdAt) - ts(a.createdAt));
       const uo = orders.filter(o => o.userId === id).sort((a, b) => ts(b.createdAt) - ts(a.createdAt));
@@ -483,7 +492,7 @@
         [bookings.filter(b => bStatus(b) === 'pending').length, 'Pending'],
         ['R' + paid.toFixed(2), 'Paid bookings'],
         [unread, 'Unread messages'],
-        [users.length, 'Users'],
+        [allUsers().length, 'Users'],
         [products.length, 'Products & services']
       ].map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
 
@@ -501,7 +510,7 @@
         }));
 
       $('userTable').innerHTML = table(['Name', 'Email', 'Phone', 'Points', 'Credit', 'Bookings', 'Orders'],
-        [...users].sort((a, b) => (uFullName(a) || '~').localeCompare(uFullName(b) || '~')).map(u => {
+        allUsers().sort((a, b) => (uFullName(a) || '~').localeCompare(uFullName(b) || '~')).map(u => {
           const nB = bookings.filter(b => b.userId === u.id).length, nO = orders.filter(o => o.userId === u.id).length;
           return `<tr class="clk" onclick="openUser('${u.id}')"><td>${avatar(u, uFullName(u))}${esc(uFullName(u) || '—')}</td><td>${esc(uEmail(u) || '—')}</td><td>${esc(u.phone || u.phoneNumber || '—')}</td><td>${esc(u.points ?? u.loyaltyPoints ?? 0)}</td><td>${u.credit ? 'R' + esc(u.credit) : '—'}</td><td>${nB}</td><td>${nO}</td></tr>`;
         }));
