@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'client_chat_system.dart';
+
 class SupportScreen extends StatefulWidget {
   const SupportScreen({super.key});
 
@@ -40,11 +42,11 @@ class _SupportScreenState extends State<SupportScreen> {
     },
     {
       "question": "What is the refund policy?",
-      "answer": "If you cancel a booking yourself, you receive a 50% refund of what you paid. If the salon cancels your booking, you receive a full refund. Approved refunds are sent back to your original payment method within 3-5 business days."
+      "answer": "If you cancel a booking yourself, you receive a 50% refund of what you paid. If the salon cancels your booking, you receive a full refund. Approved refunds are sent back to your original payment method within 7-14 business days."
     },
     {
       "question": "How do I contact customer support directly?",
-      "answer": "You can reach our live support team 24/7 via the Messages tab or by emailing support@kottonkandy.com."
+      "answer": "You can chat with our assistant from this page or the Messages tab, and ask to speak to the owner at any time. You can also email kottonkandybeautybar4@gmail.com."
     },
     {
       "question": "Is my payment information secure?",
@@ -74,8 +76,64 @@ class _SupportScreenState extends State<SupportScreen> {
       ),
       body: ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: _faqs.length,
+        itemCount: _faqs.length + 1,
         itemBuilder: (context, index) {
+          // First item: chat with the assistant
+          if (index == 0) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: primaryPurple,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.support_agent, color: Colors.white, size: 36),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Need help?',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Chat with our assistant, or ask to speak to the owner.',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: primaryPurple,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ChatScreen(
+                          salonId: 'kotton_kandy',
+                          salonName: 'Kotton Kandy',
+                        ),
+                      ),
+                    ),
+                    child: const Text('Chat now'),
+                  ),
+                ],
+              ),
+            );
+          }
+          index = index - 1;
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(

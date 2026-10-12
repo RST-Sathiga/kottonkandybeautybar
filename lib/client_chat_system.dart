@@ -1,5 +1,3 @@
-
-
 import 'dart:io';
 import 'dart:convert';
 
@@ -9,16 +7,22 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 
+import 'support_bot.dart';
 
 
-enum SenderType { client, salon }
+
+enum SenderType { client, salon, bot }
 
 SenderType senderTypeFromString(String? value) {
-  return value == 'salon' ? SenderType.salon : SenderType.client;
+  if (value == 'salon') return SenderType.salon;
+  if (value == 'bot') return SenderType.bot;
+  return SenderType.client;
 }
 
 String senderTypeToString(SenderType type) {
-  return type == SenderType.salon ? 'salon' : 'client';
+  if (type == SenderType.salon) return 'salon';
+  if (type == SenderType.bot) return 'bot';
+  return 'client';
 }
 
 
@@ -31,6 +35,7 @@ class ChatMessage {
   final String? imageUrl;
   final DateTime timestamp;
   final bool read;
+  final List<String> suggestions;
 
   ChatMessage({
     required this.id,
@@ -40,6 +45,7 @@ class ChatMessage {
     required this.timestamp,
     required this.read,
     this.imageUrl,
+    this.suggestions = const [],
   });
 
   factory ChatMessage.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -54,6 +60,9 @@ class ChatMessage {
       timestamp:
       (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
       read: data['read'] == true,
+      suggestions: (data['suggestions'] is List)
+          ? (data['suggestions'] as List).map((e) => e.toString()).toList()
+          : const [],
     );
   }
 }
@@ -73,6 +82,9 @@ class ChatSummary {
   final SenderType lastMessageSenderType;
   final int unreadForClient;
   final int unreadForSalon;
+  final bool isBotSession;
+  final bool awaitingSalon;
+  final bool closed;
 
   ChatSummary({
     required this.id,
@@ -85,6 +97,9 @@ class ChatSummary {
     required this.lastMessageSenderType,
     required this.unreadForClient,
     required this.unreadForSalon,
+    this.isBotSession = true,
+    this.awaitingSalon = false,
+    this.closed = false,
   });
 
   factory ChatSummary.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -102,6 +117,9 @@ class ChatSummary {
       senderTypeFromString(data['lastMessageSenderType']?.toString()),
       unreadForClient: (data['unreadForClient'] as num?)?.toInt() ?? 0,
       unreadForSalon: (data['unreadForSalon'] as num?)?.toInt() ?? 0,
+      isBotSession: data['isBotSession'] != false,
+      awaitingSalon: data['awaitingSalon'] == true,
+      closed: data['closed'] == true,
     );
   }
 }
@@ -147,19 +165,28 @@ class ChatService {
     final DocumentReference<Map<String, dynamic>> docRef = _chats.doc(chatId);
     final DocumentSnapshot<Map<String, dynamic>> snapshot = await docRef.get();
 
-    if (!snapshot.exists) {
+    final bool needsNewSession =
+        !snapshot.exists || snapshot.data()?['closed'] == true;
+
+    if (needsNewSession) {
+      // New chat (or a previous one was closed): start a fresh bot session.
       await docRef.set({
         'clientId': clientId,
         'clientName': clientName,
         'salonId': salonId,
         'salonName': salonName,
-        'lastMessage': '',
+        'lastMessage': SupportBot.greeting,
         'lastMessageTime': FieldValue.serverTimestamp(),
-        'lastMessageSenderType': 'client',
+        'lastMessageSenderType': 'bot',
         'unreadForClient': 0,
         'unreadForSalon': 0,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+        'isBotSession': true,
+        'awaitingSalon': false,
+        'closed': false,
+        'sessionStartedAt': FieldValue.serverTimestamp(),
+        if (!snapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      await _botSay(docRef, clientId, SupportBot.greeting, SupportBot.topics);
     }
 
     return chatId;
@@ -219,6 +246,20 @@ class ChatService {
     final bool isClient = senderType == SenderType.client;
     final WriteBatch batch = _firestore.batch();
 
+    // While the customer is still talking to the chatbot, the owner is not notified.
+    final Map<String, dynamic> chatData = (await chatRef.get()).data() ?? {};
+    final bool wasClosed = chatData['closed'] == true;
+    // A closed chat starts a fresh chatbot session when the customer writes again.
+    final bool withBot = isClient && (wasClosed || chatData['isBotSession'] != false);
+    if (isClient && wasClosed) {
+      await chatRef.set({
+        'closed': false,
+        'isBotSession': true,
+        'awaitingSalon': false,
+        'sessionStartedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+
     batch.set(messageRef, {
       'senderId': user.uid,
       'senderType': senderTypeToString(senderType),
@@ -235,7 +276,7 @@ class ChatService {
         'lastMessageTime': FieldValue.serverTimestamp(),
         'lastMessageSenderType': senderTypeToString(senderType),
         'unreadForSalon':
-        isClient ? FieldValue.increment(1) : FieldValue.increment(0),
+        (isClient && !withBot) ? FieldValue.increment(1) : FieldValue.increment(0),
         'unreadForClient':
         isClient ? FieldValue.increment(0) : FieldValue.increment(1),
       },
@@ -243,6 +284,69 @@ class ChatService {
     );
 
     await batch.commit();
+
+    // Chatbot: answer text questions while the chat is still a bot session.
+    if (isClient && trimmed.isNotEmpty) {
+      if (withBot) {
+        final BotReply reply = await SupportBot.generateResponse(trimmed);
+        await _botSay(chatRef, user.uid, reply.text, reply.suggestions);
+        if (reply.escalate) await escalateToOwner(chatId);
+      }
+    } else if (!isClient && senderType == SenderType.salon) {
+      // The owner replied: no longer waiting.
+      await chatRef.set({'awaitingSalon': false}, SetOptions(merge: true));
+    }
+  }
+
+  /// Bot messages carry the customer's uid (Firestore rules require
+  /// senderId == signed-in user) and are marked senderType 'bot'.
+  Future<void> _botSay(
+      DocumentReference<Map<String, dynamic>> chatRef,
+      String uid,
+      String text,
+      List<String> suggestions,
+      ) async {
+    await chatRef.collection('messages').add({
+      'senderId': uid,
+      'senderType': 'bot',
+      'isFromBot': true,
+      'text': text,
+      'suggestions': suggestions,
+      'timestamp': FieldValue.serverTimestamp(),
+      'read': true,
+    });
+    await chatRef.set({
+      'lastMessage': text,
+      'lastMessageTime': FieldValue.serverTimestamp(),
+      'lastMessageSenderType': 'bot',
+    }, SetOptions(merge: true));
+  }
+
+  /// Hands the chat to the owner (live support).
+  Future<void> escalateToOwner(String chatId) async {
+    await _chats.doc(chatId).set({
+      'isBotSession': false,
+      'awaitingSalon': true,
+      'unreadForSalon': FieldValue.increment(1),
+      'escalatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  /// Customer chooses to go back to the chatbot while waiting for the owner.
+  Future<void> backToBot(String chatId) async {
+    await _chats.doc(chatId).set({
+      'isBotSession': true,
+      'awaitingSalon': false,
+    }, SetOptions(merge: true));
+  }
+
+  /// Ends the session. The transcript stays in Firestore (archived).
+  Future<void> closeChat(String chatId) async {
+    await _chats.doc(chatId).set({
+      'closed': true,
+      'awaitingSalon': false,
+      'closedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> markRead({
@@ -381,6 +485,19 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _sendTopic(String topic) async {
+    if (_chatId == null) return;
+    try {
+      await _chatService.sendMessage(
+        chatId: _chatId!,
+        senderType: SenderType.client,
+        text: topic,
+      );
+    } catch (_) {
+      _showSnack('Could not send message. Please try again.');
+    }
+  }
+
   Future<String?> _uploadImageToCloudinary(File imageFile) async {
     final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudinaryCloudName/image/upload');
 
@@ -472,6 +589,27 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (v) async {
+              if (_chatId == null) return;
+              if (v == 'owner') {
+                await _chatService.sendMessage(
+                  chatId: _chatId!,
+                  senderType: SenderType.client,
+                  text: 'I would like to speak to the owner',
+                );
+              } else if (v == 'end') {
+                await _chatService.closeChat(_chatId!);
+                if (mounted) Navigator.of(context).maybePop();
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'owner', child: Text('Speak to the owner')),
+              PopupMenuItem(value: 'end', child: Text('End chat')),
+            ],
+          ),
+        ],
       ),
       body: _buildBody(),
     );
@@ -499,6 +637,38 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return Column(
       children: [
+        StreamBuilder<ChatSummary?>(
+          stream: _chatService.chatStream(_chatId!),
+          builder: (context, snap) {
+            final chat = snap.data;
+            if (chat == null || chat.closed || chat.isBotSession) {
+              return const SizedBox.shrink();
+            }
+            return Container(
+              width: double.infinity,
+              color: lightPurple,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.support_agent, size: 18, color: primaryPurple),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      chat.awaitingSalon
+                          ? 'You are chatting with the owner. She will reply here soon.'
+                          : 'You are chatting with the owner.',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => _chatService.backToBot(_chatId!),
+                    child: const Text('Back to chatbot', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
         Expanded(child: _buildMessageList()),
         _buildInputBar(),
       ],
@@ -539,7 +709,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Say hello to ${widget.salonName} to start the conversation.',
+                    'Ask a question to start the conversation.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.grey[600]),
                   ),
@@ -619,6 +789,12 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               if (message.text.isNotEmpty) const SizedBox(height: 6),
             ],
+            if (message.senderType == SenderType.bot)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text('Assistant',
+                    style: TextStyle(fontSize: 10, color: primaryPurple, fontWeight: FontWeight.bold)),
+              ),
             if (message.text.isNotEmpty)
               Text(
                 message.text,
@@ -627,6 +803,20 @@ class _ChatScreenState extends State<ChatScreen> {
                   fontSize: 14,
                 ),
               ),
+            if (message.suggestions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: message.suggestions
+                    .map((s) => ActionChip(
+                  label: Text(s, style: const TextStyle(fontSize: 12)),
+                  backgroundColor: lightPurple,
+                  onPressed: () => _sendTopic(s),
+                ))
+                    .toList(),
+              ),
+            ],
             const SizedBox(height: 4),
             Row(
               mainAxisSize: MainAxisSize.min,
@@ -708,7 +898,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   maxLines: 4,
                   textCapitalization: TextCapitalization.sentences,
                   decoration: const InputDecoration(
-                    hintText: 'Message the salon...',
+                    hintText: 'Ask a question...',
                     border: InputBorder.none,
                   ),
                   onSubmitted: (_) => _sendMessage(),

@@ -67,6 +67,8 @@
         .m.me{align-self:flex-end;background:var(--p);color:#fff}
         .send{display:flex;gap:8px;padding:10px;border-top:1px solid var(--bd)}.send input{margin:0}
         .badge{background:var(--pk);color:#fff;border-radius:10px;padding:1px 8px;font-size:12px;margin-left:6px}
+        .m.bot{background:#241a2b;border-left:3px solid #8e5aa8;font-size:13px;opacity:.9}
+        .tag{display:inline-block;background:#3a2a44;color:#e7d6f0;border-radius:8px;padding:1px 8px;font-size:11px;margin-left:6px}
         textarea{width:100%;padding:12px 14px;border:1px solid var(--bd);border-radius:12px;margin-bottom:12px;font:inherit;background:var(--bg);color:var(--tx);resize:vertical;min-height:90px}
         .tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
         .tabs button{background:var(--card);color:var(--tx);border:1px solid var(--bd)}
@@ -569,10 +571,11 @@
       const cs = [...chats].sort((a, b) => ts(b.lastMessageTime) - ts(a.lastMessageTime));
       $('clist').innerHTML = cs.length ? cs.map(c => `<div class="ci ${c.id === activeChat ? 'on' : ''}" onclick="openChat('${c.id}')">
           <b>${esc(c.clientName || uName(c.clientId))}</b>${c.unreadForSalon ? `<span class="badge">${c.unreadForSalon}</span>` : ''}
+          ${c.closed ? '<span class="tag">Closed</span>' : c.awaitingSalon ? '<span class="tag" style="background:#d81b60;color:#fff">Waiting for you</span>' : c.isBotSession !== false ? '<span class="tag">Chatbot</span>' : ''}
           <small>${esc(c.lastMessage || '')}</small></div>`).join('')
         : '<div class="empty">No conversations yet.</div>';
       const ac = chats.find(c => c.id === activeChat);
-      if (ac) $('chead').textContent = ac.clientName || uName(ac.clientId);
+      if (ac) $('chead').innerHTML = `<span>${esc(ac.clientName || uName(ac.clientId))}</span> ${ac.closed ? '<small>(closed)</small>' : `<button class="sec" style="float:right;padding:6px 12px" onclick="closeChat('${ac.id}')">End chat</button>`}`;
       renderOrders();
       renderPromo();
       renderRefunds();
@@ -1264,8 +1267,8 @@
       if (msgUnsub) msgUnsub();
       msgUnsub = db.collection(COL.chats).doc(id).collection('messages').onSnapshot(s => {
         msgs = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => ts(a.timestamp) - ts(b.timestamp));
-        $('msgs').innerHTML = msgs.map(m => `<div class="m ${m.senderType === 'salon' ? 'me' : ''}">
-          ${m.imageUrl ? `<img src="${esc(m.imageUrl)}" style="max-width:100%;border-radius:8px;display:block;margin-bottom:4px">` : ''}${esc(m.text)}</div>`).join('');
+        $('msgs').innerHTML = msgs.map(m => `<div class="m ${m.senderType === 'salon' ? 'me' : ''} ${m.senderType === 'bot' ? 'bot' : ''}">
+          ${m.senderType === 'bot' ? '<small style="display:block;opacity:.7">🤖 Chatbot</small>' : m.senderType === 'client' ? '<small style="display:block;opacity:.7">Client</small>' : ''}${m.imageUrl ? `<img src="${esc(m.imageUrl)}" style="max-width:100%;border-radius:8px;display:block;margin-bottom:4px">` : ''}${esc(m.text)}</div>`).join('');
         $('msgs').scrollTop = $('msgs').scrollHeight;
         markRead(id, msgs);
       }, e => alert('Could not load messages: ' + e.message));
@@ -1277,10 +1280,14 @@
       try {
         const ref = db.collection(COL.chats).doc(activeChat), now = FV.serverTimestamp(), b = db.batch();
         b.set(ref.collection('messages').doc(), { senderId: auth.currentUser.uid, senderType: 'salon', text, timestamp: now, read: false });
-        b.update(ref, { lastMessage: text, lastMessageTime: now, lastMessageSenderType: 'salon', unreadForClient: FV.increment(1) });
+        b.update(ref, { lastMessage: text, lastMessageTime: now, lastMessageSenderType: 'salon', unreadForClient: FV.increment(1), isBotSession: false, awaitingSalon: false, closed: false });
         await b.commit();
       } catch (e) { alert('Send failed: ' + e.message); }
     }
+    window.closeChat = id => {
+      if (!confirm('End this chat? The conversation stays saved. If the client writes again, a new chatbot session starts.')) return;
+      db.collection(COL.chats).doc(id).update({ closed: true, awaitingSalon: false, closedAt: FV.serverTimestamp() }).catch(e => alert(e.message));
+    };
     $('sendBtn').onclick = sendReply;
     $('ci').onkeydown = e => { if (e.key === 'Enter') sendReply(); };
 
