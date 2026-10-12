@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'client_chat_system.dart';
+import 'report_issue.dart';
 
 class SupportScreen extends StatefulWidget {
   const SupportScreen({super.key});
@@ -42,11 +43,11 @@ class _SupportScreenState extends State<SupportScreen> {
     },
     {
       "question": "What is the refund policy?",
-      "answer": "If you cancel a booking yourself, you receive a 50% refund of what you paid. If the salon cancels your booking, you receive a full refund. Approved refunds are sent back to your original payment method within 7-14 business days."
+      "answer": "If you cancel a booking yourself, you receive a 50% refund of what you paid. If the salon cancels your booking, you receive a full refund. Approved refunds are sent back to your original payment method within 3-5 business days."
     },
     {
       "question": "How do I contact customer support directly?",
-      "answer": "You can chat with our assistant from this page or the Messages tab, and ask to speak to the owner at any time. You can also email kottonkandybeautybar4@gmail.com."
+      "answer": "You can chat with our assistant from this page or the Messages tab, and ask to speak to the owner at any time. You can also email support@kottonkandy.com."
     },
     {
       "question": "Is my payment information secure?",
@@ -76,7 +77,7 @@ class _SupportScreenState extends State<SupportScreen> {
       ),
       body: ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: _faqs.length + 1,
+        itemCount: _faqs.length + 2,
         itemBuilder: (context, index) {
           // First item: chat with the assistant
           if (index == 0) {
@@ -133,7 +134,35 @@ class _SupportScreenState extends State<SupportScreen> {
               ),
             );
           }
-          index = index - 1;
+          // Second item: report an issue
+          if (index == 1) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: ListTile(
+                contentPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                leading: const Icon(Icons.report_gmailerrorred_outlined,
+                    color: primaryPurple, size: 30),
+                title: const Text(
+                  'Report an issue',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                subtitle: const Text(
+                    'Problem with a product, booking or delivery? Tell us and track the outcome.',
+                    style: TextStyle(fontSize: 12)),
+                trailing: const Icon(Icons.chevron_right, color: primaryPurple),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ReportIssueScreen()),
+                ),
+              ),
+            );
+          }
+          index = index - 2;
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(

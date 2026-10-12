@@ -90,6 +90,13 @@
         .rsum div{display:flex;justify-content:space-between;padding:2px 0;font-size:14px}
         .rsum .tot{font-weight:700;color:var(--p)}
         .ract{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+        .ithread{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+        .im{max-width:85%;padding:9px 13px;border-radius:14px;background:var(--bg);word-wrap:break-word;font-size:14px}
+        .im.me{align-self:flex-end;background:var(--p);color:#fff}
+        .im small{display:block;opacity:.7;font-size:11px;margin-top:3px}
+        .ev{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+        .ev img{width:96px;height:96px;object-fit:cover;border-radius:10px;cursor:zoom-in;border:1px solid var(--bd)}
+        .chip.open{background:#e1bee7;color:#4a148c}.chip.in_review{background:#bbdefb;color:#0d47a1}.chip.awaiting_client{background:#ffe0b2;color:#7a4a00}.chip.resolved{background:#c8e6c9;color:#1b5e20}.chip.rejected{background:#ffcdd2;color:#b71c1c}
         .modal{position:fixed;inset:0;background:#0009;display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
         .mbox{background:var(--card);border-radius:16px;padding:24px;width:100%;max-width:460px;max-height:90vh;overflow:auto}
         .mbox h4{margin:0 0 10px;font-size:20px}
@@ -190,6 +197,7 @@
         <a data-t="lockers">Lockers</a>
         <a data-t="promos">Promotional Emails</a>
         <a data-t="refunds">Refunds<span class="badge hide" id="refundBadge"></span></a>
+        <a data-t="issues">Issues<span class="badge hide" id="issueBadge"></span></a>
         <a data-t="messages">Messages</a>
         <a data-t="loyalty">Loyalty QR</a>
         <a data-t="users">Users</a>
@@ -264,6 +272,12 @@
                 <p class="sub" style="font-size:12px">A new code is created automatically every day.<br>Clients must have a paid booking today to earn points.<br>Show this page on a tablet at reception.</p>
                 <button class="sec" id="qrNew">Generate a new code now</button>
             </div>
+        </section>
+        <section id="issues" class="hide">
+            <h3>Reported issues</h3>
+            <p class="sub">Problems clients report about products, bookings, deliveries or payments. Reply, ask for photo evidence, then resolve or close each one.</p>
+            <div class="tabs" id="issueTabs"></div>
+            <div id="issueList"></div>
         </section>
         <section id="orders" class="hide">
             <h3>Orders</h3>
@@ -415,6 +429,14 @@
     </div>
 </div>
 
+<div id="issueModal" class="modal hide" onclick="if(event.target===this)closeIssue()">
+    <div class="mbox" style="max-width:680px">
+        <div id="issueBody"></div>
+        <div id="issueThread" class="ithread"></div>
+        <div id="issueActions"></div>
+    </div>
+</div>
+
 <div id="photoModal" class="modal hide" onclick="this.classList.add('hide')" style="cursor:zoom-out">
     <img id="photoBox" alt="Reference photo">
 </div>
@@ -491,7 +513,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
-    const COL = { bookings: 'appointments', users: 'users', products: 'products', admins: 'admins', chats: 'chats', notifications: 'notifications', refunds: 'refund_requests', orders: 'orders' };
+    const COL = { bookings: 'appointments', users: 'users', products: 'products', admins: 'admins', chats: 'chats', notifications: 'notifications', refunds: 'refund_requests', orders: 'orders', issues: 'issues' };
 
     firebase.initializeApp({
       apiKey: 'AIzaSyDMYIUD3vMTyuBhgIzwh-CQGh0Bi8jy_ug',
@@ -507,6 +529,7 @@
     let unsubs = [], msgUnsub = null, bookings = [], users = [], products = [], chats = [], msgs = [], activeChat = null;
     let weeklyPromos = [], purgedOnce = false;
     let orders = [], orderTab = 'new', editOrder = null;
+    let issues = [], issueTab = 'action', activeIssue = null, issueUnsub = null, issueMsgs = [];
     let refunds = [], refundTab = 'pending', refundErr = '', decision = null, psReq = null, psRef = '';
 
     // Calendar state variables
@@ -576,6 +599,7 @@
       });
       watch(COL.chats, d => chats = d);
       watch(COL.orders, d => orders = d);
+      watch(COL.issues, d => issues = d);
       unsubs.push(db.collection(COL.refunds).onSnapshot(
         s => { loaded[COL.refunds] = true; refunds = s.docs.map(d => ({ id: d.id, ...d.data() })); refundErr = ''; render(); },
         e => { console.error(COL.refunds, e); refundErr = e.message; renderRefunds(); }));
@@ -772,7 +796,7 @@
     let alertsOn = false, alertCount = 0, audioCtx = null;
     try { alertsOn = localStorage.getItem('kk_alerts') === 'on'; } catch (e) {}
     const baseTitle = document.title;
-    const alertState = { bookings: null, orders: null, refunds: null, chats: null };
+    const alertState = { bookings: null, orders: null, refunds: null, chats: null, issues: null };
 
     function paintAlertToggle() { $('alertToggle').textContent = '🔔 Alerts: ' + (alertsOn ? 'on' : 'off'); }
     function ping() {
@@ -825,6 +849,9 @@
           o => ['New order', 'R' + (o.amountPaid ?? o.totalAmount ?? o.price ?? 0) + ' · ' + (o.userEmail || ''), 'orders']],
         refunds: [COL.refunds, refunds, r => ({ s: rStatus(r) }), (r, old) => !old && rStatus(r) === 'pending',
           r => ['Refund request', (r.serviceName || 'Appointment') + ' · R' + (r.refundAmount ?? 0), 'refunds']],
+        issues: [COL.issues, issues, x => ({ u: x.unreadForAdmin || 0 }),
+          (x, old) => !old ? (x.status || 'open') === 'open' : (x.unreadForAdmin || 0) > old.u,
+          x => [x.subject ? 'Issue: ' + x.subject : 'Issue reported', (x.userName || 'Client') + ': ' + (x.lastMessage || ''), 'issues']],
         chats: [COL.chats, chats, c => ({ w: !!c.awaitingSalon, u: c.unreadForSalon || 0, bot: c.isBotSession !== false }),
           (c, old) => (c.awaitingSalon && (!old || !old.w)) || (c.isBotSession === false && (c.unreadForSalon || 0) > (old ? old.u : 0)),
           c => [c.awaitingSalon ? 'Client wants the owner' : 'New message', (c.clientName || 'Client') + ': ' + (c.lastMessage || ''), 'messages']],
@@ -838,6 +865,127 @@
         alertState[k] = next;
       });
     }
+
+    // ---- Issues: clients report a problem, the owner replies, asks for evidence, resolves ----
+    const ICAT = { product: 'Product', delivery: 'Delivery', booking: 'Booking', payment: 'Payment / refund', other: 'Other' };
+    const ILABEL = { open: 'New', in_review: 'In review', awaiting_client: 'Evidence requested', resolved: 'Resolved', rejected: 'Closed' };
+    const iStatus = i => i.status || 'open';
+    const iDone = i => ['resolved', 'rejected'].includes(iStatus(i));
+    const iNeeds = i => !iDone(i) && (iStatus(i) === 'open' || (i.unreadForAdmin || 0) > 0);
+    const iGroup = { action: i => iNeeds(i), waiting: i => !iDone(i) && !iNeeds(i), done: i => iDone(i), all: () => true };
+    const iWhen = t => ts(t) ? new Date(ts(t)).toLocaleString() : '';
+    const evHtml = urls => (Array.isArray(urls) && urls.length)
+      ? `<div class="ev">${urls.map(u => `<img src="${esc(u)}" onclick="showImg(this.src)" alt="Evidence">`).join('')}</div>` : '';
+    window.showImg = src => { $('photoBox').src = src; $('photoModal').classList.remove('hide'); };
+    window.setIssueTab = t => { issueTab = t; renderIssues(); };
+
+    function renderIssues() {
+      const list = [...issues].sort((a, b) => ts(b.updatedAt || b.createdAt) - ts(a.updatedAt || a.createdAt));
+      const tabs = { action: 'Needs reply', waiting: 'Waiting on client', done: 'Resolved / closed', all: 'All' };
+      $('issueTabs').innerHTML = Object.entries(tabs).map(([k, v]) =>
+        `<button class="${k === issueTab ? 'on' : ''}" onclick="setIssueTab('${k}')">${v} (${list.filter(iGroup[k]).length})</button>`).join('');
+      const n = list.filter(iGroup.action).length;
+      $('issueBadge').textContent = n; $('issueBadge').classList.toggle('hide', !n);
+      const shown = list.filter(iGroup[issueTab]);
+      $('issueList').innerHTML = shown.length ? shown.map(i => `<div class="card">
+        <div class="rhead"><b>${esc(i.subject || 'Issue')}</b><span class="chip ${esc(iStatus(i))}">${esc(ILABEL[iStatus(i)] || iStatus(i))}</span></div>
+        <div class="rmeta">${esc(ICAT[i.category] || 'Other')} · ${esc(i.userName || '')} ${esc(i.userEmail ? '(' + i.userEmail + ')' : '')}<br>
+          ${i.relatedLabel ? 'About: ' + esc(i.relatedLabel) + '<br>' : ''}Reported: ${esc(iWhen(i.createdAt))}${(i.unreadForAdmin || 0) > 0 && iStatus(i) !== 'open' ? ' <span class="tag" style="background:#d81b60;color:#fff">New reply</span>' : ''}</div>
+        <div class="rnote">${esc((i.lastMessage || i.description || '').slice(0, 140))}</div>
+        <div class="ract"><button onclick="openIssue('${i.id}')">Open</button></div>
+      </div>`).join('') : '<div class="card empty">Nothing here.</div>';
+      if (activeIssue) paintIssueHead();
+    }
+
+    function relatedHtml(i) {
+      if (i.relatedType === 'order') {
+        const o = orders.find(x => x.id === i.relatedId);
+        if (!o) return `<div class="rmeta">Order: ${esc(i.relatedLabel || i.relatedId)}</div>`;
+        const items = Array.isArray(o.items) ? o.items.map(x => esc((x.quantity || 1) + ' x ' + (x.name || 'Item'))).join(', ') : '—';
+        return `<div class="rmeta"><b>Order #${esc(String(o.id).slice(0, 8))}</b> · ${esc(oNorm(o.status))} · paid ${money(o.amountPaid ?? o.totalAmount ?? o.price ?? 0)}<br>Items: ${items}${o.trackingNumber ? '<br>Tracking: ' + esc(o.trackingNumber) : ''}</div>`;
+      }
+      if (i.relatedType === 'booking') {
+        const b = bookings.find(x => x.id === i.relatedId);
+        if (!b) return `<div class="rmeta">Booking: ${esc(i.relatedLabel || i.relatedId)}</div>`;
+        return `<div class="rmeta"><b>${esc(bName(b))}</b> · ${esc(bDate(b))} ${esc(bTime(b))} · R${esc(bPrice(b))} · ${esc(bStatus(b))} · payment ${esc(b.paymentStatus || '—')}</div>`;
+      }
+      return '';
+    }
+
+    function paintIssueHead() {
+      const i = issues.find(x => x.id === activeIssue); if (!i) return;
+      $('issueBody').innerHTML = `<div class="rhead"><b style="font-size:19px">${esc(i.subject || 'Issue')}</b><span class="chip ${esc(iStatus(i))}">${esc(ILABEL[iStatus(i)] || iStatus(i))}</span></div>
+        <div class="rmeta">${esc(ICAT[i.category] || 'Other')} · ${esc(i.userName || '')} ${esc(i.userEmail ? '(' + i.userEmail + ')' : '')} · ${esc(iWhen(i.createdAt))}</div>
+        ${relatedHtml(i)}
+        <div class="im" style="max-width:100%;margin-top:10px">${esc(i.description || '')}${evHtml(i.evidence)}</div>
+        ${iDone(i) && i.resolution ? `<div class="rnote">Outcome: ${esc(i.resolution)}</div>` : ''}`;
+    }
+    function paintIssueThread() {
+      $('issueThread').innerHTML = issueMsgs.map(m => `<div class="im ${m.senderType === 'admin' ? 'me' : ''}">${esc(m.text || '')}${evHtml(m.evidence)}<small>${m.senderType === 'admin' ? 'You' : 'Client'} · ${esc(iWhen(m.timestamp))}</small></div>`).join('');
+      const m = $('issueModal').querySelector('.mbox'); m.scrollTop = m.scrollHeight;
+    }
+    let issueActionsFor = null;
+    function paintIssueActions() {
+      const i = issues.find(x => x.id === activeIssue); if (!i) return;
+      const key = activeIssue + ':' + iDone(i);
+      if (issueActionsFor === key) return; issueActionsFor = key;
+      $('issueActions').innerHTML = iDone(i)
+        ? `<div class="mbtns"><button class="ghost" onclick="reopenIssue()">Re-open</button><button class="sec" onclick="closeIssue()">Close</button></div>`
+        : `<textarea id="iText" placeholder="Write to the client. Required to resolve or close; optional when asking for evidence."></textarea>
+           <div class="err" id="iErr"></div>
+           <div class="mbtns">
+             <button class="ghost" onclick="closeIssue()">Close window</button>
+             <button class="sec" onclick="issueAct('reply')">Send reply</button>
+             <button class="sec" onclick="issueAct('evidence')">Ask for evidence</button>
+             <button class="del" style="padding:10px 16px" onclick="issueAct('reject')">Decline / close</button>
+             <button onclick="issueAct('resolve')">Resolve</button>
+           </div>`;
+    }
+    window.openIssue = id => {
+      activeIssue = id; issueActionsFor = null; issueMsgs = [];
+      $('issueModal').classList.remove('hide'); $('issueThread').innerHTML = '';
+      paintIssueHead(); paintIssueActions();
+      if (issueUnsub) issueUnsub();
+      issueUnsub = db.collection(COL.issues).doc(id).collection('messages').onSnapshot(s => {
+        issueMsgs = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => ts(a.timestamp) - ts(b.timestamp));
+        paintIssueThread();
+      }, e => { $('issueThread').innerHTML = `<div class="err">Could not load the conversation: ${esc(e.message)}</div>`; });
+      const i = issues.find(x => x.id === id);
+      if (i && (i.unreadForAdmin || 0) > 0) db.collection(COL.issues).doc(id).update({ unreadForAdmin: 0 }).catch(console.error);
+    };
+    window.closeIssue = () => {
+      $('issueModal').classList.add('hide'); activeIssue = null;
+      if (issueUnsub) { issueUnsub(); issueUnsub = null; }
+    };
+    window.reopenIssue = async () => {
+      if (!activeIssue) return;
+      try { await db.collection(COL.issues).doc(activeIssue).update({ status: 'in_review', resolution: '', updatedAt: FV.serverTimestamp() }); issueActionsFor = null; paintIssueActions(); }
+      catch (e) { alert(e.message); }
+    };
+    window.issueAct = async kind => {
+      const i = issues.find(x => x.id === activeIssue); if (!i) return;
+      const text = ($('iText').value || '').trim();
+      const need = { reply: 'Please write a message.', resolve: 'Please write the outcome for the client.', reject: 'Please explain why the report is being closed.' };
+      if (need[kind] && !text) { $('iErr').textContent = need[kind]; return; }
+      const evidenceMsg = text || 'Please send photos or more details so we can look into this.';
+      const cfg = {
+        reply: { status: 'in_review', msg: text, title: 'Reply to your report', note: text },
+        evidence: { status: 'awaiting_client', msg: evidenceMsg, title: 'We need evidence', note: evidenceMsg },
+        resolve: { status: 'resolved', msg: text, title: 'Your report was resolved', note: text },
+        reject: { status: 'rejected', msg: text, title: 'Your report was closed', note: text }
+      }[kind];
+      try {
+        const ref = db.collection(COL.issues).doc(i.id), b = db.batch();
+        b.set(ref.collection('messages').doc(), { senderId: auth.currentUser.uid, senderType: 'admin', text: cfg.msg, evidence: [], timestamp: FV.serverTimestamp() });
+        const upd = { status: cfg.status, lastMessage: cfg.msg, unreadForClient: FV.increment(1), unreadForAdmin: 0, updatedAt: FV.serverTimestamp() };
+        if (kind === 'resolve' || kind === 'reject') { upd.resolution = text; upd.decidedAt = FV.serverTimestamp(); }
+        b.update(ref, upd);
+        await b.commit();
+        await notifyClient(i.userId, cfg.title, cfg.note).catch(console.error);
+        $('iText').value = ''; $('iErr').textContent = '';
+        issueActionsFor = null; paintIssueActions();
+      } catch (e) { $('iErr').textContent = 'Failed: ' + e.message; }
+    };
 
     const ALL_STATUS = ['pending', 'confirmed', 'paid', 'rescheduled', 'completed', 'cancelled', 'failed'];
     const ts = x => x?.toMillis ? x.toMillis() : (x ? new Date(x).getTime() || 0 : 0);
@@ -967,6 +1115,7 @@
       renderOrders();
       renderPromo();
       renderRefunds();
+      renderIssues();
       renderWeekly();
       if (!$('analytics').classList.contains('hide')) renderAnalytics();
     }
