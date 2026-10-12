@@ -51,8 +51,8 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
     // Trigger floating slogan entrance
     _logoSloganController.forward();
 
-    // 3. Navigate to LoginScreen after 15 seconds delay
-    _navigationTimer = Timer(const Duration(seconds: 4), () {
+    // 3. Navigate to LoginScreen after 6 seconds delay
+    _navigationTimer = Timer(const Duration(seconds: 6), () {
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -190,4 +190,4 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
       ),
     );
   }
-}
+}                                         
