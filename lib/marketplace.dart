@@ -20,6 +20,7 @@ import 'refunds.dart';
 import 'package:provider/provider.dart';
 import 'notifications_screen.dart';
 import 'notification_prefs_service.dart';
+import 'promo_popup.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
@@ -96,13 +97,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     _productsSub =
         _firestore.collection('products').snapshots().listen((snap) {
           // Keep the built-in list until products exist in Firestore.
-          if (snap.docs.isEmpty) return;
-          final items = snap.docs.map((d) {
+          final docs = snap.docs.where((d) => d.data()['kind'] != 'promo').toList();
+          if (docs.isEmpty) return;
+          final items = docs.map((d) {
             final data = d.data();
             final category = (data['category'] ?? 'Hair').toString();
             final url = (data['imageUrl'] ?? '').toString();
             final asset = (data['image'] ?? '').toString();
             final image = url.isNotEmpty ? url : (asset.isNotEmpty ? asset : null);
+            final deleteAt = data['pendingDeletion'] == true
+                ? (data['deleteAt'] as Timestamp?)?.toDate()
+                : null;
             return <String, dynamic>{
               'id': d.id,
               'name': data['name'] ?? '',
@@ -113,6 +118,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               if (data['isProduct'] == true) 'isProduct': true,
               'icon': _iconFor(category),
               if (image != null) 'image': image,
+              if (deleteAt != null) 'deleteAt': deleteAt,
             };
           }).toList();
           if (mounted) setState(() => _remoteItems = items);
@@ -268,6 +274,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     super.initState();
     _loadUserFavorites();
     _listenToProducts();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) PromoPopup.showIfAvailable(context);
+    });
   }
 
   @override
@@ -316,7 +325,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   List<Map<String, dynamic>> get _filteredServices {
     final String search = _searchController.text.trim().toLowerCase();
 
+    final DateTime now = DateTime.now();
+
     return (_remoteItems ?? _sampleServices).where((service) {
+      final DateTime? deleteAt = service['deleteAt'] as DateTime?;
+      if (deleteAt != null && !deleteAt.isAfter(now)) return false;
+
       final String name = service['name'].toString().toLowerCase();
       final String category = service['category'].toString().toLowerCase();
 
@@ -1049,6 +1063,24 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           color: Colors.grey[700],
                         ),
                       ),
+                      if (service['deleteAt'] != null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'Leaving soon',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.orange.shade800,
+                            ),
+                          ),
+                        ),
+                      ],
                       const Spacer(),
                       Text(
                         'R${(service['price'] as num).toStringAsFixed(2)}',

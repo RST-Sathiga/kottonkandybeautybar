@@ -102,6 +102,11 @@
         #lkMap{border-radius:14px;min-height:300px;z-index:0}
         @media(max-width:700px){.lk{grid-template-columns:1fr;height:auto}#lkMap{height:50vh}}
         @media(max-width:700px){#app{flex-direction:column}nav{width:100%;flex-direction:row;flex-wrap:wrap;padding:10px}nav h2{width:100%;margin:0 4px 6px}nav .out{margin:0 0 0 auto}.chat{grid-template-columns:1fr;height:auto}.clist{max-height:200px}.cview{height:60vh}}
+        .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+        .chartbox{position:relative;height:260px}
+        .chk{display:flex;align-items:center;gap:8px;margin-bottom:12px}.chk input{width:auto;margin:0}
+        .leaving{display:inline-block;background:#fff3e0;color:#e65100;border-radius:8px;padding:2px 8px;font-size:12px;font-weight:600}
+        tr.pend td{opacity:.75}
     </style>
 </head>
 <body>
@@ -130,6 +135,8 @@
         <a data-t="loyalty">Loyalty QR</a>
         <a data-t="users">Users</a>
         <a data-t="products">Products</a>
+        <a data-t="weekly">Promo of the week</a>
+        <a data-t="analytics">Analytics</a>
         <a class="out" id="logout">Sign out</a>
     </nav>
     <main>
@@ -232,6 +239,41 @@
             <h3>Users</h3>
             <div class="card" id="userTable"></div>
         </section>
+        <section id="weekly" class="hide">
+            <h3>Promo of the week</h3>
+            <div class="card">
+                <p class="sub">The active promo pops up for customers every time they log in to the app, until its valid-until date. Only one promo is live at a time.</p>
+                <b id="wpFormTitle">New promo</b>
+                <input id="wpId" type="hidden">
+                <div class="row" style="margin-top:10px">
+                    <input id="wpTitle" placeholder="Title (e.g. 20 % off bookings this week)">
+                    <input id="wpText" placeholder="Description (e.g. Book an appointment this week and get 20% off)">
+                    <input id="wpBtn" placeholder="Button text (default: Got it)">
+                    <input id="wpEnd" type="date" title="Valid until (optional)">
+                </div>
+                <div class="row">
+                    <input id="wpImg" placeholder="Image URL (optional) – or upload below">
+                    <input id="wpFile" type="file" accept="image/*">
+                </div>
+                <label class="chk"><input id="wpActive" type="checkbox" checked> Active (turns off any other live promo)</label>
+                <button class="sec" id="wpSave">Save promo</button>
+                <button id="wpCancel" class="hide" style="margin-left:6px;background:#888">Cancel edit</button>
+                <span id="wpMsg" class="sub" style="margin-left:10px"></span>
+            </div>
+            <div class="card" id="wpTable"></div>
+        </section>
+        <section id="analytics" class="hide">
+            <h3>Analytics</h3>
+            <div class="stats" id="aStats"></div>
+            <div class="grid2">
+                <div class="card"><b>Revenue – last 30 days</b><div class="chartbox"><canvas id="chRevenue"></canvas></div></div>
+                <div class="card"><b>Bookings – last 30 days</b><div class="chartbox"><canvas id="chBookings"></canvas></div></div>
+                <div class="card"><b>User growth – last 12 months</b><div class="chartbox"><canvas id="chUsers"></canvas></div></div>
+                <div class="card"><b>Booking status</b><div class="chartbox"><canvas id="chStatus"></canvas></div></div>
+                <div class="card"><b>Top services</b><div class="chartbox"><canvas id="chTopS"></canvas></div></div>
+                <div class="card"><b>Top products</b><div class="chartbox"><canvas id="chTopP"></canvas></div></div>
+            </div>
+        </section>
         <section id="products" class="hide">
             <h3>Products &amp; services</h3>
             <div class="card">
@@ -322,6 +364,7 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -340,6 +383,7 @@
     const $ = id => document.getElementById(id);
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     let unsubs = [], msgUnsub = null, bookings = [], users = [], products = [], chats = [], msgs = [], activeChat = null;
+    let weeklyPromos = [], purgedOnce = false;
     let orders = [], orderTab = 'new', editOrder = null;
     let refunds = [], refundTab = 'pending', refundErr = '', decision = null, psReq = null, psRef = '';
 
@@ -372,6 +416,7 @@
       $(a.dataset.t).classList.remove('hide');
       if (a.dataset.t === 'loyalty') loadLoyaltyQr();
       if (a.dataset.t === 'lockers') initLockers();
+      if (a.dataset.t === 'analytics') renderAnalytics();
     });
 
     // ---- Live data ----
@@ -380,7 +425,11 @@
     function listen() {
       watch(COL.bookings, d => bookings = d);
       watch(COL.users, d => users = d);
-      watch(COL.products, d => products = d);
+      watch(COL.products, d => {
+        products = d.filter(x => x.kind !== 'promo');
+        weeklyPromos = d.filter(x => x.kind === 'promo');
+        if (!purgedOnce) { purgedOnce = true; purgeExpiredProducts(); }
+      });
       watch(COL.chats, d => chats = d);
       watch(COL.orders, d => orders = d);
       unsubs.push(db.collection(COL.refunds).onSnapshot(
@@ -506,10 +555,7 @@
           return `<tr class="clk" onclick="openUser('${u.id}')"><td>${avatar(u, uFullName(u))}${esc(uFullName(u) || '—')}</td><td>${esc(uEmail(u) || '—')}</td><td>${esc(u.phone || u.phoneNumber || '—')}</td><td>${esc(u.points ?? u.loyaltyPoints ?? 0)}</td><td>${u.credit ? 'R' + esc(u.credit) : '—'}</td><td>${nB}</td><td>${nO}</td></tr>`;
         }));
 
-      $('prodTable').innerHTML = table(['', 'Name', 'Type', 'Category', 'Price', 'Description', ''],
-        products.map(p => `<tr><td>${p.imageUrl ? `<img class="th" src="${esc(p.imageUrl)}">` : ''}</td><td>${esc(p.name)}</td>
-          <td>${p.isProduct ? 'Product' : 'Service'}</td><td>${esc(p.category)}</td><td>R${esc(p.price)}</td><td>${esc(p.description)}</td>
-          <td><button class="del" onclick="delDoc('${COL.products}','${p.id}')">Delete</button></td></tr>`));
+      renderProducts();
 
       const cs = [...chats].sort((a, b) => ts(b.lastMessageTime) - ts(a.lastMessageTime));
       $('clist').innerHTML = cs.length ? cs.map(c => `<div class="ci ${c.id === activeChat ? 'on' : ''}" onclick="openChat('${c.id}')">
@@ -521,6 +567,244 @@
       renderOrders();
       renderPromo();
       renderRefunds();
+      renderWeekly();
+      if (!$('analytics').classList.contains('hide')) renderAnalytics();
+    }
+
+    // ---- Products: delayed delete (72 hours, can be cancelled) ----
+    const DELETE_HOURS = 72;
+    const isPending = p => p.pendingDeletion === true && p.deleteAt;
+    const leftText = ms => {
+      if (ms <= 0) return 'removing…';
+      const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+      return h >= 1 ? `${h}h ${m}m left` : `${m}m left`;
+    };
+    function renderProducts() {
+      const now = Date.now();
+      $('prodTable').innerHTML = table(['', 'Name', 'Type', 'Category', 'Price', 'Description', ''],
+        products.map(p => {
+          const pend = isPending(p);
+          return `<tr class="${pend ? 'pend' : ''}"><td>${p.imageUrl ? `<img class="th" src="${esc(p.imageUrl)}">` : ''}</td><td>${esc(p.name)}${pend ? `<br><span class="leaving">Deleting · ${leftText(ts(p.deleteAt) - now)}</span>` : ''}</td>
+          <td>${p.isProduct ? 'Product' : 'Service'}</td><td>${esc(p.category)}</td><td>R${esc(p.price)}</td><td>${esc(p.description)}</td>
+          <td>${pend ? `<button class="sec" onclick="cancelDelete('${p.id}')">Cancel delete</button>` : `<button class="del" onclick="scheduleDelete('${p.id}')">Delete</button>`}</td></tr>`;
+        }));
+    }
+    window.scheduleDelete = async id => {
+      const p = products.find(x => x.id === id);
+      if (!confirm(`Delete "${p ? p.name : 'this item'}"? It stays visible to customers (marked "Leaving soon") for ${DELETE_HOURS} hours, and you can cancel during that time.`)) return;
+      try {
+        await db.collection(COL.products).doc(id).update({
+          pendingDeletion: true,
+          deleteAt: firebase.firestore.Timestamp.fromMillis(Date.now() + DELETE_HOURS * 3600000),
+          deletionRequestedAt: FV.serverTimestamp()
+        });
+      } catch (e) { alert(e.message); }
+    };
+    window.cancelDelete = async id => {
+      try {
+        await db.collection(COL.products).doc(id).update({ pendingDeletion: false, deleteAt: FV.delete(), deletionRequestedAt: FV.delete() });
+      } catch (e) { alert(e.message); }
+    };
+    async function purgeExpiredProducts() {
+      const now = Date.now(), expired = products.filter(p => isPending(p) && ts(p.deleteAt) <= now);
+      if (!expired.length) return;
+      try {
+        const b = db.batch();
+        expired.forEach(p => b.delete(db.collection(COL.products).doc(p.id)));
+        await b.commit();
+      } catch (e) { console.error('purge', e); }
+    }
+    setInterval(() => { if (products.length) { purgeExpiredProducts(); renderProducts(); } }, 60000);
+
+    // ---- Promo of the week (stored in products with kind: 'promo') ----
+    const dmy = d => `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+    const pad2 = n => String(n).padStart(2, '0');
+    const promoLive = p => {
+      const now = Date.now();
+      if (!p.active) return false;
+      if (p.startsAt && ts(p.startsAt) > now) return false;
+      if (p.endsAt && ts(p.endsAt) < now) return false;
+      return true;
+    };
+    function renderWeekly() {
+      $('wpTable').innerHTML = table(['', 'Title', 'Description', 'Valid until', 'Status', ''],
+        [...weeklyPromos].sort((a, b) => ts(b.createdAt) - ts(a.createdAt)).map(p => `<tr><td>${p.imageUrl ? `<img class="th" src="${esc(p.imageUrl)}">` : ''}</td>
+          <td>${esc(p.title)}</td><td style="white-space:normal;max-width:280px">${esc(p.description || p.message)}</td>
+          <td>${p.endsAt ? esc(dmy(new Date(ts(p.endsAt)))) : 'No end date'}</td><td>${promoLive(p) ? '🟢 Live' : (p.active ? '🟠 Expired' : '⚪ Off')}</td>
+          <td><button onclick="editWeekly('${p.id}')">Edit</button>
+          <button class="sec" onclick="toggleWeekly('${p.id}',${!p.active})">${p.active ? 'Turn off' : 'Turn on'}</button>
+          <button class="del" onclick="deleteWeekly('${p.id}')">Delete</button></td></tr>`));
+    }
+    function resetWeeklyForm() {
+      ['wpId', 'wpTitle', 'wpText', 'wpImg', 'wpBtn', 'wpEnd', 'wpFile'].forEach(i => $(i).value = '');
+      $('wpActive').checked = true;
+      $('wpFormTitle').textContent = 'New promo';
+      $('wpCancel').classList.add('hide');
+    }
+    window.editWeekly = id => {
+      const p = weeklyPromos.find(x => x.id === id);
+      if (!p) return;
+      $('wpId').value = id;
+      $('wpTitle').value = p.title || '';
+      $('wpText').value = p.description || p.message || '';
+      $('wpImg').value = p.imageUrl || '';
+      $('wpBtn').value = p.buttonText || '';
+      $('wpFile').value = '';
+      const d = p.endsAt ? new Date(ts(p.endsAt)) : null;
+      $('wpEnd').value = d ? `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` : '';
+      $('wpActive').checked = !!p.active;
+      $('wpFormTitle').textContent = 'Editing: ' + (p.title || 'promo');
+      $('wpCancel').classList.remove('hide');
+      $('wpMsg').textContent = '';
+      $('weekly').scrollIntoView({ behavior: 'smooth' });
+    };
+    $('wpCancel').onclick = () => { resetWeeklyForm(); $('wpMsg').textContent = ''; };
+    $('wpFile').onchange = async e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      $('wpMsg').textContent = 'Uploading image…';
+      try {
+        const fd = new FormData();
+        fd.append('file', f);
+        fd.append('upload_preset', 'profile_uploads');
+        const r = await fetch('https://api.cloudinary.com/v1_1/nuqsuqyw/image/upload', { method: 'POST', body: fd });
+        const j = await r.json();
+        if (!j.secure_url) throw new Error((j.error && j.error.message) || 'Upload failed');
+        $('wpImg').value = j.secure_url;
+        $('wpMsg').textContent = 'Image uploaded ✓';
+      } catch (err) { $('wpMsg').textContent = 'Upload failed: ' + err.message; }
+    };
+    $('wpSave').onclick = async () => {
+      const id = $('wpId').value, title = $('wpTitle').value.trim(), description = $('wpText').value.trim(), end = $('wpEnd').value;
+      const active = $('wpActive').checked;
+      if (!title || !description) return alert('Title and description are required.');
+      try {
+        const b = db.batch();
+        if (active) weeklyPromos.filter(p => p.active && p.id !== id).forEach(p => b.update(db.collection(COL.products).doc(p.id), { active: false }));
+        const existing = weeklyPromos.find(p => p.id === id);
+        const data = {
+          kind: 'promo', title, description, message: description, imageUrl: $('wpImg').value.trim(),
+          buttonText: $('wpBtn').value.trim() || 'Got it', active,
+          startsAt: existing && existing.startsAt ? existing.startsAt : null,
+          endsAt: end ? firebase.firestore.Timestamp.fromDate(new Date(end + 'T23:59:59')) : null
+        };
+        if (id) b.update(db.collection(COL.products).doc(id), { ...data, updatedAt: FV.serverTimestamp() });
+        else b.set(db.collection(COL.products).doc(), { ...data, createdAt: FV.serverTimestamp() });
+        await b.commit();
+        resetWeeklyForm();
+        $('wpMsg').textContent = active ? 'Promo saved and live ✓' : 'Promo saved (off) ✓';
+      } catch (e) { alert(e.message); }
+    };
+    window.toggleWeekly = async (id, on) => {
+      try {
+        const b = db.batch();
+        if (on) weeklyPromos.filter(p => p.active && p.id !== id).forEach(p => b.update(db.collection(COL.products).doc(p.id), { active: false }));
+        b.update(db.collection(COL.products).doc(id), { active: on });
+        await b.commit();
+      } catch (e) { alert(e.message); }
+    };
+    window.deleteWeekly = id => {
+      if (confirm('Delete this promo permanently?')) db.collection(COL.products).doc(id).delete().catch(e => alert(e.message));
+    };
+
+    // ---- Analytics ----
+    const charts = {};
+    const oTotal = o => Number(o.amountPaid ?? o.totalAmount ?? o.price ?? 0) || 0;
+    const oCounts = o => !['cancelled', 'refunded', 'failed'].includes(String(o.status || '').toLowerCase());
+    const dayKey = t => { const d = new Date(t); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
+    function drawChart(id, config) {
+      if (typeof Chart === 'undefined') return;
+      if (charts[id]) { charts[id].data = config.data; charts[id].update('none'); return; }
+      charts[id] = new Chart($(id), { ...config, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: config.type === 'doughnut' } }, ...(config.options || {}) } });
+    }
+    function renderAnalytics() {
+      const PURPLE = '#6B3A82', PINK = '#E91E63';
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const days = [...Array(30)].map((_, i) => new Date(today.getTime() - (29 - i) * 86400000));
+      const keys = days.map(d => dayKey(d.getTime()));
+      const bookRevDay = keys.map(() => 0), ordRevDay = keys.map(() => 0), bookCountDay = keys.map(() => 0);
+      const add = (arr, t, v) => { if (!t) return; const i = keys.indexOf(dayKey(t)); if (i > -1) arr[i] += v; };
+
+      let bookRev = 0, ordRev = 0;
+      const status = { 'Confirmed / completed': 0, Pending: 0, 'Cancelled / failed': 0 }, svc = {}, prod = {};
+      bookings.forEach(b => {
+        const st = bStatus(b), price = Number(bPrice(b)) || 0;
+        if (st === 'pending') status.Pending++;
+        else if (['cancelled', 'failed'].includes(st)) status['Cancelled / failed']++;
+        else status['Confirmed / completed']++;
+        add(bookCountDay, ts(b.createdAt), 1);
+        if (b.paymentStatus === 'paid' && st !== 'cancelled') { bookRev += price; add(bookRevDay, ts(b.paidAt) || ts(b.createdAt), price); }
+        const n = bName(b);
+        if (n !== '—' && st !== 'failed') svc[n] = (svc[n] || 0) + 1;
+      });
+      orders.forEach(o => {
+        if (!oCounts(o)) return;
+        ordRev += oTotal(o);
+        add(ordRevDay, ts(o.createdAt), oTotal(o));
+        (o.items || []).forEach(it => { if (it && it.name) prod[it.name] = (prod[it.name] || 0) + (Number(it.quantity) || 1); });
+      });
+
+      const months = [...Array(12)].map((_, i) => new Date(today.getFullYear(), today.getMonth() - 11 + i, 1));
+      const userTimes = users.map(u => ts(u.createdAt)).filter(Boolean);
+      const unknownJoin = users.length - userTimes.length;
+      const newPerMonth = months.map((m, i) => {
+        const end = i < 11 ? months[i + 1].getTime() : Infinity;
+        return userTimes.filter(t => t >= m.getTime() && t < end).length;
+      });
+      const before = userTimes.filter(t => t < months[0].getTime()).length + unknownJoin;
+      let run = before;
+      const cumulative = newPerMonth.map(n => (run += n));
+      const thisMonth = newPerMonth[11];
+
+      $('aStats').innerHTML = [
+        [money(bookRev + ordRev), 'Total revenue'],
+        [money(bookRev), 'Booking revenue'],
+        [money(ordRev), 'Shop order revenue'],
+        [bookings.length, 'Bookings'],
+        [orders.length, 'Orders'],
+        [users.length, 'Users'],
+        [thisMonth, 'New users this month'],
+        [products.length, 'Products & services']
+      ].map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
+
+      const labels = days.map(d => `${d.getDate()}/${d.getMonth() + 1}`);
+      drawChart('chRevenue', {
+        type: 'bar',
+        data: { labels, datasets: [
+          { label: 'Bookings', data: bookRevDay, backgroundColor: PURPLE, stack: 'r' },
+          { label: 'Shop orders', data: ordRevDay, backgroundColor: PINK, stack: 'r' }
+        ] },
+        options: { plugins: { legend: { display: true } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }
+      });
+      drawChart('chBookings', {
+        type: 'line',
+        data: { labels, datasets: [{ label: 'Bookings', data: bookCountDay, borderColor: PURPLE, backgroundColor: 'rgba(107,58,130,.15)', fill: true, tension: .3 }] },
+        options: { scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+      });
+      drawChart('chUsers', {
+        type: 'bar',
+        data: { labels: months.map(m => m.toLocaleDateString([], { month: 'short', year: '2-digit' })), datasets: [
+          { type: 'line', label: 'Total users', data: cumulative, borderColor: PURPLE, backgroundColor: PURPLE, tension: .3, yAxisID: 'y' },
+          { type: 'bar', label: 'New users', data: newPerMonth, backgroundColor: 'rgba(233,30,99,.6)', yAxisID: 'y' }
+        ] },
+        options: { plugins: { legend: { display: true } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+      });
+      drawChart('chStatus', {
+        type: 'doughnut',
+        data: { labels: Object.keys(status), datasets: [{ data: Object.values(status), backgroundColor: ['#2e7d32', '#ef6c00', '#c62828'] }] }
+      });
+      const top = m => Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 7);
+      const ts1 = top(svc), tp1 = top(prod);
+      drawChart('chTopS', {
+        type: 'bar',
+        data: { labels: ts1.map(x => x[0]), datasets: [{ label: 'Bookings', data: ts1.map(x => x[1]), backgroundColor: PURPLE }] },
+        options: { indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+      });
+      drawChart('chTopP', {
+        type: 'bar',
+        data: { labels: tp1.map(x => x[0]), datasets: [{ label: 'Units sold', data: tp1.map(x => x[1]), backgroundColor: PINK }] },
+        options: { indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+      });
     }
 
     // ---- Loyalty QR (same codes and format as the app: loyalty_codes/{date} -> KK1|date|code) ----
