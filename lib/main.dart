@@ -13,6 +13,7 @@ import 'notifications_screen.dart';
 import 'notification_prefs_service.dart';
 import 'notification_service.dart';
 import 'settings.dart'; // Ensure settings is imported
+import 'user_sync.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -27,6 +28,7 @@ Future<void> main() async {
 
   FirebaseAuth.instance.authStateChanges().listen((user) async {
     if (user == null) return;
+    await syncUserProfile(user);
     try {
       await FirebaseMessaging.instance.requestPermission();
       await NotificationService.instance.init(
