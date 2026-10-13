@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'client_chat_system.dart';
+import 'report_issue.dart';
+
 class SupportScreen extends StatefulWidget {
   const SupportScreen({super.key});
 
@@ -16,11 +19,11 @@ class _SupportScreenState extends State<SupportScreen> {
   final List<Map<String, String>> _faqs = [
     {
       "question": "How do I earn loyalty points?",
-      "answer": "You earn loyalty points automatically every time you complete a booking or make a purchase through the app. 100 points equals \R1 off your next order."
+      "answer": "You earn 25 points for every order you place in the app, and 50 points for every completed booking (scan the QR code at the salon after your appointment). When you reach 500 points you can redeem them for R100 credit."
     },
     {
       "question": "How do I cancel or reschedule a booking?",
-      "answer": "Go to the Bookings tab, select your active booking, and tap 'Cancel' or 'Reschedule'. Cancellations made 24 hours in advance receive a full refund."
+      "answer": "Open the Refunds page to cancel or reschedule a booking. If you cancel because you cannot make it, you receive a 50% refund. If the salon cancels your appointment, you receive a full refund."
     },
     {
       "question": "What payment options do you accept?",
@@ -40,11 +43,11 @@ class _SupportScreenState extends State<SupportScreen> {
     },
     {
       "question": "What is the refund policy?",
-      "answer": "Refunds are processed within 3-5 business days back to your original payment method upon approved cancellation or item return."
+      "answer": "If you cancel a booking yourself, you receive a 50% refund of what you paid. If the salon cancels your booking, you receive a full refund. Approved refunds are sent back to your original payment method within 3-5 business days."
     },
     {
       "question": "How do I contact customer support directly?",
-      "answer": "You can reach our live support team 24/7 via the Messages tab or by emailing support@kottonkandy.com."
+      "answer": "You can chat with our assistant from this page or the Messages tab, and ask to speak to the owner at any time. You can also email support@kottonkandy.com."
     },
     {
       "question": "Is my payment information secure?",
@@ -74,8 +77,92 @@ class _SupportScreenState extends State<SupportScreen> {
       ),
       body: ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: _faqs.length,
+        itemCount: _faqs.length + 2,
         itemBuilder: (context, index) {
+          // First item: chat with the assistant
+          if (index == 0) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: primaryPurple,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.support_agent, color: Colors.white, size: 36),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Need help?',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Chat with our assistant, or ask to speak to the owner.',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: primaryPurple,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ChatScreen(
+                          salonId: 'kotton_kandy',
+                          salonName: 'Kotton Kandy',
+                        ),
+                      ),
+                    ),
+                    child: const Text('Chat now'),
+                  ),
+                ],
+              ),
+            );
+          }
+          // Second item: report an issue
+          if (index == 1) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: ListTile(
+                contentPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                leading: const Icon(Icons.report_gmailerrorred_outlined,
+                    color: primaryPurple, size: 30),
+                title: const Text(
+                  'Report an issue',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                subtitle: const Text(
+                    'Problem with a product, booking or delivery? Tell us and track the outcome.',
+                    style: TextStyle(fontSize: 12)),
+                trailing: const Icon(Icons.chevron_right, color: primaryPurple),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ReportIssueScreen()),
+                ),
+              ),
+            );
+          }
+          index = index - 2;
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(

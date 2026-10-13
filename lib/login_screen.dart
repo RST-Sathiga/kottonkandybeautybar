@@ -38,6 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _isLoading = false;
   bool _rememberMe = true;
+  bool _checkingSession = true; // true while we look for a saved login
 
   // ============================================================
   // COLOURS
@@ -48,6 +49,61 @@ class _LoginScreenState extends State<LoginScreen> {
 
   static const Color fieldColor =
   Color(0xFF9156A1);
+
+  // ============================================================
+  // AUTO LOGIN (Remember me)
+  // Firebase keeps you signed in on the phone. If you ticked
+  // "Remember me" last time, skip this screen and go straight in.
+  // If you did not tick it, you are signed out and must log in again.
+  // ============================================================
+
+  @override
+  void initState() {
+    super.initState();
+    _tryAutoLogin();
+  }
+
+  Future<void> _tryAutoLogin() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final bool remember = prefs.getBool('remember_me') ?? false;
+      User? user = _auth.currentUser;
+
+      if (user != null && !remember) {
+        await _auth.signOut();
+        user = null;
+      }
+
+      if (user != null && remember) {
+        try {
+          await user.reload();
+        } on FirebaseAuthException catch (e) {
+          // Account deleted/disabled or token revoked: ask for a fresh login.
+          if (e.code == 'user-not-found' ||
+              e.code == 'user-disabled' ||
+              e.code == 'user-token-expired' ||
+              e.code == 'invalid-user-token') {
+            await _auth.signOut();
+            user = null;
+          }
+          // Any other error (e.g. no internet): keep the saved login.
+        } catch (_) {}
+        user = _auth.currentUser;
+
+        if (user != null && user.emailVerified) {
+          if (!mounted) return;
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const MarketplaceScreen()),
+                (route) => false,
+          );
+          return;
+        }
+      }
+    } catch (_) {}
+
+    if (mounted) setState(() => _checkingSession = false);
+  }
 
   // ============================================================
   // DISPOSE
@@ -316,6 +372,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_checkingSession) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFD9D6DE),
+        body: Center(
+          child: CircularProgressIndicator(color: primaryPurple),
+        ),
+      );
+    }
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,

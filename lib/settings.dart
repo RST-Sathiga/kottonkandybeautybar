@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'legal_pages.dart'; // Import the newly created legal pages
+import 'notification_prefs_service.dart';
+import 'notification_settings_section.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -14,35 +15,18 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   static const Color primaryPurple = Color(0xFF6B3A82);
 
-  // Toggle state variables
-  bool pushNotifications = true;
-  bool emailNotifications = true;
-  bool promoAlerts = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPreferences();
-  }
-
-  Future<void> _loadPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      pushNotifications = prefs.getBool('pushNotifications') ?? true;
-      emailNotifications = prefs.getBool('emailNotifications') ?? true;
-      promoAlerts = prefs.getBool('promoAlerts') ?? false;
-    });
-  }
-
-  Future<void> _savePreference(String key, bool val) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(key, val);
-  }
+  // Notification preferences are now stored in Firestore (users/{uid}.prefs)
+  // instead of SharedPreferences, so the server and the admin can see them
+  // and never send a message the client turned off.
+  final NotificationPrefsService _notificationPrefs = NotificationPrefsService();
 
   Future<void> _deleteAccount() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
+        // Remove this device's push token and the notification inbox first.
+        await _notificationPrefs.clearNotificationData();
+
         await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
         await user.delete();
         if (mounted) {
@@ -73,35 +57,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           // NOTIFICATIONS
           _buildSectionHeader("Notifications"),
-          SwitchListTile(
-            activeThumbColor: primaryPurple,
-            title: const Text("Push Notifications", style: TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: const Text("Receive updates on appointments and orders"),
-            value: pushNotifications,
-            onChanged: (val) {
-              setState(() => pushNotifications = val);
-              _savePreference('pushNotifications', val);
-            },
-          ),
-          SwitchListTile(
-            activeThumbColor: primaryPurple,
-            title: const Text("Email Receipts & Updates", style: TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: const Text("Receive booking confirmations via email"),
-            value: emailNotifications,
-            onChanged: (val) {
-              setState(() => emailNotifications = val);
-              _savePreference('emailNotifications', val);
-            },
-          ),
-          SwitchListTile(
-            activeThumbColor: primaryPurple,
-            title: const Text("Promotional Alerts", style: TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: const Text("Get special Rand discounts (R) and loyalty offers"),
-            value: promoAlerts,
-            onChanged: (val) {
-              setState(() => promoAlerts = val);
-              _savePreference('promoAlerts', val);
-            },
+          NotificationSettingsSection(
+            service: _notificationPrefs,
+            activeColor: primaryPurple,
           ),
           const Divider(),
 

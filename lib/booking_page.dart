@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,14 +8,23 @@ import 'package:image_picker/image_picker.dart';
 
 import 'payment_service.dart';
 import 'paystack_checkout_screen.dart';
+import 'simulated_payment.dart';
+import 'credit_helper.dart';
 import 'orders.dart';
+import 'service_reviews.dart';
 
 class BookingPage extends StatefulWidget {
   final Map<String, dynamic>? preselectedService;
 
+  /// When set, the page works in "reschedule mode": the client picks a new
+  /// date and time for this existing appointment and pays the reschedule fee.
+  /// Must contain the appointment's data plus its document id under 'id'.
+  final Map<String, dynamic>? rescheduleAppointment;
+
   const BookingPage({
     super.key,
     this.preselectedService,
+    this.rescheduleAppointment,
   });
 
   @override
@@ -29,6 +39,9 @@ class _BookingPageState extends State<BookingPage> {
 
   static const Color primaryPurple = Color(0xFF6B3A82);
   static const Color lightPurple = Color(0xFFF3EAF6);
+  static const double _rescheduleFee = 100.0;
+
+  bool get _isReschedule => widget.rescheduleAppointment != null;
 
   String _selectedCategory = 'Press-ons';
   Map<String, dynamic>? _selectedService;
@@ -165,6 +178,18 @@ class _BookingPageState extends State<BookingPage> {
       _selectedService = widget.preselectedService;
       _selectedCategory = widget.preselectedService!['category'] ?? 'Press-ons';
     }
+    if (widget.rescheduleAppointment != null) {
+      // Same service and duration as the original booking.
+      final a = widget.rescheduleAppointment!;
+      _selectedService = {
+        'id': a['serviceId'],
+        'name': a['serviceName'] ?? 'Appointment',
+        'category': a['category'],
+        'price': (a['price'] as num?) ?? 0,
+        'durationMins': a['durationMins'] ?? 60,
+        'duration': a['duration'] ?? '',
+      };
+    }
   }
 
   void _showMessage(String message, {bool isError = true}) {
@@ -250,6 +275,8 @@ class _BookingPageState extends State<BookingPage> {
       List<Map<String, DateTime>> bookedRanges = [];
 
       for (var doc in existingBookings.docs) {
+        // The appointment being rescheduled must not block its own new slot.
+        if (doc.id == widget.rescheduleAppointment?['id']) continue;
         final data = doc.data() as Map<String, dynamic>;
         final String timeSlot = data['timeSlot'] ?? '';
         final int durationMins = data['durationMins'] ?? 60;
@@ -280,6 +307,11 @@ class _BookingPageState extends State<BookingPage> {
         if (!isOverlapping) {
           validSlots.add(_formatTimeOfDay(start));
         }
+      }
+
+      // Moving to the exact same date and time is not a reschedule.
+      if (_isReschedule && dateStr == widget.rescheduleAppointment!['date']) {
+        validSlots.remove(widget.rescheduleAppointment!['timeSlot']);
       }
 
       if (mounted) {
@@ -320,7 +352,11 @@ class _BookingPageState extends State<BookingPage> {
 
   Future<void> _pickReferenceImage() async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 900,
+      imageQuality: 60,
+    );
     if (image != null) {
       setState(() {
         _referenceImage = File(image.path);
@@ -337,6 +373,20 @@ class _BookingPageState extends State<BookingPage> {
       return await snapshot.ref.getDownloadURL();
     } catch (e) {
       debugPrint('Error uploading image: $e');
+      return null;
+    }
+  }
+
+  /// Backup when Firebase Storage is not available: the (small, compressed) photo is
+  /// saved inside the booking itself so the admin can still see it.
+  Future<String?> _referenceImageAsBase64() async {
+    if (_referenceImage == null) return null;
+    try {
+      final bytes = await _referenceImage!.readAsBytes();
+      if (bytes.length > 700 * 1024) return null; // Firestore documents are limited to 1 MB
+      return base64Encode(bytes);
+    } catch (e) {
+      debugPrint('Error reading image: $e');
       return null;
     }
   }
@@ -369,12 +419,19 @@ class _BookingPageState extends State<BookingPage> {
 
     try {
       final double price = (_selectedService!['price'] as num).toDouble();
-      final int amountInCents = _amountInCents(price);
+
+      // Loyalty credit: ask if the client wants to use it on this booking.
+      final double creditUsed = await CreditHelper.askToUseCredit(context, total: price);
+      if (!mounted) return;
+      final int amountInCents = _amountInCents(price - creditUsed);
 
       final DocumentReference bookingRef = _firestore.collection('appointments').doc();
       bookingId = bookingRef.id;
 
       final String? imageUrl = await _uploadReferenceImage(bookingId);
+      final String? imageData = (_referenceImage != null && imageUrl == null)
+          ? await _referenceImageAsBase64()
+          : null;
       final String formattedDate = _getDateString(_selectedDate!);
 
       await bookingRef.set({
@@ -386,11 +443,14 @@ class _BookingPageState extends State<BookingPage> {
         'serviceName': _selectedService!['name'],
         'category': _selectedService!['category'],
         'price': price,
+        'creditUsed': creditUsed,
+        'amountPaid': price - creditUsed,
         'durationMins': _selectedService!['durationMins'],
         'duration': _selectedService!['duration'],
         'date': formattedDate,
         'timeSlot': _selectedTimeSlot,
         'referencePhoto': imageUrl,
+        if (imageData != null) 'referencePhotoData': imageData,
         'status': 'pending',
         'paymentStatus': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
@@ -409,14 +469,11 @@ class _BookingPageState extends State<BookingPage> {
       });
 
       if (!mounted) return;
-      final bool? isPaid = await Navigator.push<bool>(
+      final bool? isPaid = await payWithSimulatedStepThenPaystack(
         context,
-        MaterialPageRoute(
-          builder: (context) => PaystackCheckoutScreen(
-            authorizationUrl: initResult.authorizationUrl,
-            reference: initResult.reference,
-          ),
-        ),
+        amountInCents: amountInCents,
+        authorizationUrl: initResult.authorizationUrl,
+        reference: initResult.reference,
       );
 
       if (isPaid != true) {
@@ -439,6 +496,8 @@ class _BookingPageState extends State<BookingPage> {
         'paidAt': FieldValue.serverTimestamp(),
       });
 
+      await CreditHelper.spendCredit(amount: creditUsed, refId: bookingRef.id);
+
       if (!mounted) return;
 
       Navigator.pushReplacement(
@@ -455,6 +514,132 @@ class _BookingPageState extends State<BookingPage> {
     }
   }
 
+  Future<void> _submitReschedule() async {
+    if (_selectedDate == null) {
+      _showMessage('Please select a new date.');
+      return;
+    }
+    if (_selectedTimeSlot == null) {
+      _showMessage('Please select a new time slot.');
+      return;
+    }
+
+    final User? user = _auth.currentUser;
+    if (user == null || user.email == null || user.email!.isEmpty) {
+      _showMessage('Please log in with a valid email account first.');
+      return;
+    }
+
+    final a = widget.rescheduleAppointment!;
+    final String appointmentId = a['id'] as String;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final initResult = await _paymentService.initializePayment(
+        email: user.email!,
+        amountInCents: _amountInCents(_rescheduleFee),
+        bookingId: appointmentId,
+        serviceName: 'Reschedule fee - ${a['serviceName'] ?? 'Appointment'}',
+      );
+
+      if (!mounted) return;
+      final bool? isPaid = await payWithSimulatedStepThenPaystack(
+        context,
+        amountInCents: _amountInCents(_rescheduleFee),
+        authorizationUrl: initResult.authorizationUrl,
+        reference: initResult.reference,
+      );
+
+      if (isPaid != true) {
+        throw Exception('Payment was cancelled. Your appointment was not changed.');
+      }
+
+      final PaymentVerification verification = await _paymentService.verifyPayment(
+        reference: initResult.reference,
+      );
+
+      if (!verification.success || verification.status != 'success') {
+        throw Exception('Payment could not be verified. Your appointment was not changed.');
+      }
+
+      // Move the SAME appointment to the new slot. The original payment,
+      // status and paymentReference are left untouched.
+      try {
+        await _firestore.collection('appointments').doc(appointmentId).update({
+          'previousDate': a['date'],
+          'previousTimeSlot': a['timeSlot'],
+          'date': _getDateString(_selectedDate!),
+          'timeSlot': _selectedTimeSlot,
+          'rescheduled': true,
+          'rescheduleCount': FieldValue.increment(1),
+          'rescheduleFee': _rescheduleFee,
+          'reschedulePaymentReference': verification.reference,
+          'rescheduledAt': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {
+        throw Exception(
+            'Your R100 payment went through, but we could not update the appointment. '
+                'Please contact us and quote reference ${verification.reference}.');
+      }
+
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      Navigator.pop(context, true);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+              'Rescheduled to ${_getDateString(_selectedDate!)} at $_selectedTimeSlot.'),
+          backgroundColor: Colors.green.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      _showMessage(e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Widget _rescheduleSummary() {
+    final a = widget.rescheduleAppointment!;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: lightPurple,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: primaryPurple.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${a['serviceName'] ?? 'Appointment'}',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text('Current booking: ${a['date']} at ${a['timeSlot']}'),
+          const Divider(height: 24),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Icon(Icons.info_outline, color: primaryPurple, size: 20),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'A rescheduling fee of R100.00 applies. This fee is payable now and is '
+                      'non-refundable. Your original payment remains on this appointment.',
+                  style: TextStyle(fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final filteredServices = _salonServices
@@ -464,7 +649,8 @@ class _BookingPageState extends State<BookingPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF9F7FA),
       appBar: AppBar(
-        title: const Text('Book an Appointment', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        title: Text(_isReschedule ? 'Reschedule Appointment' : 'Book an Appointment',
+            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
@@ -476,82 +662,99 @@ class _BookingPageState extends State<BookingPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('1. Select Category', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 45,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _categories.length,
-                itemBuilder: (context, index) {
-                  final category = _categories[index];
-                  final isSelected = category == _selectedCategory;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 10),
-                    child: ChoiceChip(
-                      label: Text(category),
-                      selected: isSelected,
-                      selectedColor: primaryPurple,
-                      backgroundColor: Colors.white,
-                      labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : Colors.black87,
-                        fontWeight: FontWeight.w600,
+            if (_isReschedule)
+              _rescheduleSummary()
+            else ...[
+              const Text('1. Select Category', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 45,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _categories.length,
+                  itemBuilder: (context, index) {
+                    final category = _categories[index];
+                    final isSelected = category == _selectedCategory;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: ChoiceChip(
+                        label: Text(category),
+                        selected: isSelected,
+                        selectedColor: primaryPurple,
+                        backgroundColor: Colors.white,
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : Colors.black87,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        onSelected: (selected) {
+                          setState(() {
+                            _selectedCategory = category;
+                            _selectedService = null;
+                            _selectedTimeSlot = null;
+                            _availableTimeSlots.clear();
+                          });
+                        },
                       ),
-                      onSelected: (selected) {
-                        setState(() {
-                          _selectedCategory = category;
-                          _selectedService = null;
-                          _selectedTimeSlot = null;
-                          _availableTimeSlots.clear();
-                        });
-                      },
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            const SizedBox(height: 25),
-
-            const Text('2. Select Service', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            ...filteredServices.map((service) {
-              final isSelected = _selectedService?['id'] == service['id'];
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: isSelected ? lightPurple : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: isSelected ? primaryPurple : Colors.transparent, width: 2),
-                ),
-                child: ListTile(
-                  onTap: () {
-                    setState(() {
-                      _selectedService = service;
-                      _selectedTimeSlot = null;
-                    });
-                    if (_selectedDate != null) {
-                      _generateAvailableTimeSlots();
-                    }
+                    );
                   },
-                  leading: CircleAvatar(
-                    backgroundColor: lightPurple,
-                    child: Icon(service['icon'] as IconData, color: primaryPurple),
-                  ),
-                  title: Text(service['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('${service['description']}\nDuration: ${service['duration']}'),
-                  isThreeLine: true,
-                  trailing: Text(
-                    'R${(service['price'] as num).toStringAsFixed(2)}',
-                    style: const TextStyle(color: primaryPurple, fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
                 ),
-              );
-            }),
+              ),
 
-            const SizedBox(height: 20),
+              const SizedBox(height: 25),
 
-            const Text('3. Select Date', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text('2. Select Service', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              ...filteredServices.map((service) {
+                final isSelected = _selectedService?['id'] == service['id'];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: isSelected ? lightPurple : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: isSelected ? primaryPurple : Colors.transparent, width: 2),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListTile(
+                        onTap: () {
+                          setState(() {
+                            _selectedService = service;
+                            _selectedTimeSlot = null;
+                          });
+                          if (_selectedDate != null) {
+                            _generateAvailableTimeSlots();
+                          }
+                        },
+                        leading: CircleAvatar(
+                          backgroundColor: lightPurple,
+                          child: Icon(service['icon'] as IconData, color: primaryPurple),
+                        ),
+                        title: Text(service['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('${service['description']}\nDuration: ${service['duration']}'),
+                        isThreeLine: true,
+                        trailing: Text(
+                          'R${(service['price'] as num).toStringAsFixed(2)}',
+                          style: const TextStyle(color: primaryPurple, fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 72, bottom: 8),
+                        child: ServiceRatingChip(
+                          serviceId: service['id'] as String,
+                          serviceName: service['name'] as String,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+
+              const SizedBox(height: 20),
+
+            ],
+            Text(_isReschedule ? '1. Select New Date' : '3. Select Date',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             InkWell(
               onTap: () async {
@@ -593,7 +796,8 @@ class _BookingPageState extends State<BookingPage> {
 
             const SizedBox(height: 25),
 
-            const Text('4. Select Time Slot', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(_isReschedule ? '2. Select New Time Slot' : '4. Select Time Slot',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Text(
               _selectedDate == null
@@ -632,167 +836,171 @@ class _BookingPageState extends State<BookingPage> {
 
             const SizedBox(height: 25),
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  '5. Reference Photo',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  'Optional',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Upload an inspo photo of the hair or nail set you want.',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 12),
+            if (!_isReschedule) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    '5. Reference Photo',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    'Optional',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Upload an inspo photo of the hair or nail set you want.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 12),
 
-            _referenceImage != null
-                ? Stack(
-              children: [
-                Container(
-                  height: 180,
+              _referenceImage != null
+                  ? Stack(
+                children: [
+                  Container(
+                    height: 180,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      image: DecorationImage(
+                        image: FileImage(_referenceImage!),
+                        fit: BoxFit.cover,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.4),
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.2),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _referenceImage = null;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          size: 18,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 12,
+                    right: 12,
+                    child: InkWell(
+                      onTap: _pickReferenceImage,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.7),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.edit, size: 14, color: Colors.white),
+                            SizedBox(width: 6),
+                            Text(
+                              'Change',
+                              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+                  : GestureDetector(
+                onTap: _pickReferenceImage,
+                child: Container(
+                  height: 120,
                   width: double.infinity,
                   decoration: BoxDecoration(
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    image: DecorationImage(
-                      image: FileImage(_referenceImage!),
-                      fit: BoxFit.cover,
-                    ),
+                    border: Border.all(color: primaryPurple.withValues(alpha: 0.3), width: 1.5),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: const BoxDecoration(
+                          color: lightPurple,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.add_a_photo_outlined,
+                          color: primaryPurple,
+                          size: 26,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Tap to attach style reference photo',
+                        style: TextStyle(
+                          color: primaryPurple,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                Positioned.fill(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.4),
-                          Colors.transparent,
-                          Colors.black.withValues(alpha: 0.2),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _referenceImage = null;
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.close,
-                        size: 18,
-                        color: Colors.red,
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 12,
-                  right: 12,
-                  child: InkWell(
-                    onTap: _pickReferenceImage,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.edit, size: 14, color: Colors.white),
-                          SizedBox(width: 6),
-                          Text(
-                            'Change',
-                            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            )
-                : GestureDetector(
-              onTap: _pickReferenceImage,
-              child: Container(
-                height: 120,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: primaryPurple.withValues(alpha: 0.3), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: const BoxDecoration(
-                        color: lightPurple,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.add_a_photo_outlined,
-                        color: primaryPurple,
-                        size: 26,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Tap to attach style reference photo',
-                      style: TextStyle(
-                        color: primaryPurple,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
               ),
-            ),
+            ],
             const SizedBox(height: 30),
             SizedBox(
               width: double.infinity,
               height: 55,
               child: ElevatedButton.icon(
-                onPressed: _isLoading ? null : _submitBooking,
+                onPressed: _isLoading ? null : (_isReschedule ? _submitReschedule : _submitBooking),
                 icon: const Icon(Icons.payment),
                 label: Text(
-                  _selectedService == null
+                  _isReschedule
+                      ? 'PAY R${_rescheduleFee.toStringAsFixed(2)} & RESCHEDULE'
+                      : _selectedService == null
                       ? 'SELECT A SERVICE'
                       : 'PAY R${(_selectedService!['price'] as num).toStringAsFixed(2)} & BOOK',
                 ),
