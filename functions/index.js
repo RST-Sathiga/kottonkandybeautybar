@@ -8,6 +8,9 @@ const db = admin.firestore();
 // Loyalty: QR scan, 500-point reward, order points
 Object.assign(exports, require('./loyalty'));
 
+// Day-before appointment reminders + "send your face photo" action
+Object.assign(exports, require('./reminders'));
+
 // Turns a Firestore Timestamp or a "YYYY-MM-DD" string into "YYYY-MM-DD".
 function dateText(v) {
   if (!v) return '';

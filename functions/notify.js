@@ -8,8 +8,15 @@ const MARKETING = new Set(['promotion', 'new_item']);
 // Types that may also be emailed (when the client's Email toggle is on).
 const EMAIL_TYPES = new Set(['payment', 'delivery', 'booking', 'promotion']);
 
+// The app saves one toggle at a time, so `prefs` can be partial (e.g. { email: false }).
+// Always fill in the missing ones with the defaults, otherwise a missing "push"
+// is treated as OFF and no push is ever sent.
+function prefsOf(user) {
+  return { push: true, email: true, promotions: false, ...(user.prefs || {}) };
+}
+
 function allowed(user, type, channel) {
-  const p = user.prefs || { push: true, email: true, promotions: false };
+  const p = prefsOf(user);
   if (MARKETING.has(type) && !p.promotions) return false;
   if (channel === 'push') return !!p.push && (user.fcmTokens || []).length > 0;
   if (channel === 'email') return !!p.email && !!user.email && EMAIL_TYPES.has(type);
@@ -31,7 +38,7 @@ async function notify(uid, { type, title, body, data = {}, skipInbox = false }) 
       user.email = (await admin.auth().getUser(uid)).email;
     } catch (_) {}
   }
-  const prefs = user.prefs || { push: true, email: true, promotions: false };
+  const prefs = prefsOf(user);
 
   // Opted out of marketing: send nothing, store nothing.
   if (MARKETING.has(type) && !prefs.promotions) return;

@@ -11,6 +11,7 @@ import 'paystack_checkout_screen.dart';
 import 'simulated_payment.dart';
 import 'credit_helper.dart';
 import 'orders.dart';
+import 'service_reviews.dart';
 
 class BookingPage extends StatefulWidget {
   final Map<String, dynamic>? preselectedService;
@@ -712,27 +713,39 @@ class _BookingPageState extends State<BookingPage> {
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: isSelected ? primaryPurple : Colors.transparent, width: 2),
                   ),
-                  child: ListTile(
-                    onTap: () {
-                      setState(() {
-                        _selectedService = service;
-                        _selectedTimeSlot = null;
-                      });
-                      if (_selectedDate != null) {
-                        _generateAvailableTimeSlots();
-                      }
-                    },
-                    leading: CircleAvatar(
-                      backgroundColor: lightPurple,
-                      child: Icon(service['icon'] as IconData, color: primaryPurple),
-                    ),
-                    title: Text(service['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text('${service['description']}\nDuration: ${service['duration']}'),
-                    isThreeLine: true,
-                    trailing: Text(
-                      'R${(service['price'] as num).toStringAsFixed(2)}',
-                      style: const TextStyle(color: primaryPurple, fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListTile(
+                        onTap: () {
+                          setState(() {
+                            _selectedService = service;
+                            _selectedTimeSlot = null;
+                          });
+                          if (_selectedDate != null) {
+                            _generateAvailableTimeSlots();
+                          }
+                        },
+                        leading: CircleAvatar(
+                          backgroundColor: lightPurple,
+                          child: Icon(service['icon'] as IconData, color: primaryPurple),
+                        ),
+                        title: Text(service['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('${service['description']}\nDuration: ${service['duration']}'),
+                        isThreeLine: true,
+                        trailing: Text(
+                          'R${(service['price'] as num).toStringAsFixed(2)}',
+                          style: const TextStyle(color: primaryPurple, fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 72, bottom: 8),
+                        child: ServiceRatingChip(
+                          serviceId: service['id'] as String,
+                          serviceName: service['name'] as String,
+                        ),
+                      ),
+                    ],
                   ),
                 );
               }),

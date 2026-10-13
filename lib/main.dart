@@ -12,6 +12,8 @@ import 'client_chat_system.dart';
 import 'notifications_screen.dart';
 import 'notification_prefs_service.dart';
 import 'notification_service.dart';
+import 'appointment_verification.dart';
+import 'salon_info.dart';
 import 'settings.dart'; // Ensure settings is imported
 import 'user_sync.dart';
 
@@ -29,14 +31,27 @@ Future<void> main() async {
   FirebaseAuth.instance.authStateChanges().listen((user) async {
     if (user == null) return;
     await syncUserProfile(user);
+    // Each step has its own try/catch so one failure can never stop the others.
+    // The phone's push token is saved FIRST: without it the server cannot send
+    // notifications when the app is closed.
     try {
       await FirebaseMessaging.instance.requestPermission();
+    } catch (e) {
+      debugPrint('Notification permission error: $e');
+    }
+    try {
+      await NotificationPrefsService().registerToken();
+    } catch (e) {
+      debugPrint('Could not save push token: $e');
+    }
+    try {
       await NotificationService.instance.init(
         navigatorKey,
-        knownRoutes: {'/loyalty', '/booking', '/orders', '/chat', '/notifications', '/settings'},
+        knownRoutes: {'/loyalty', '/booking', '/orders', '/chat', '/notifications', '/settings', '/verification', '/salon'},
       );
-      await NotificationPrefsService().registerToken();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Notification setup error: $e');
+    }
   });
 
   runApp(const MyApp());
@@ -67,6 +82,8 @@ class MyApp extends StatelessWidget {
         '/notifications': (context) => const NotificationsScreen(),
         '/orders': (context) => const OrdersScreen(),
         '/settings': (context) => const SettingsScreen(),
+        '/verification': (context) => const AppointmentVerificationScreen(),
+        '/salon': (context) => const SalonLocationScreen(),
         '/chat': (context) => const ChatScreen(
           salonId: 'kotton_kandy',
           salonName: 'Kotton Kandy',

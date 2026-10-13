@@ -152,6 +152,8 @@ class NotificationBell extends StatelessWidget {
     Widget bell(int count) {
       return IconButton(
         icon: Badge(
+          backgroundColor: const Color(0xFFD32F2F), // same red as the cart badge
+          textColor: Colors.white,
           isLabelVisible: count > 0,
           label: Text(count > 99 ? '99+' : '$count'),
           child: const Icon(Icons.notifications_none, color: Colors.black87),

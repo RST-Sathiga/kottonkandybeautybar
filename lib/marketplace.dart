@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -21,6 +23,9 @@ import 'package:provider/provider.dart';
 import 'notifications_screen.dart';
 import 'notification_prefs_service.dart';
 import 'promo_popup.dart';
+import 'product_reviews.dart';
+import 'appointment_verification.dart';
+import 'salon_info.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
@@ -64,6 +69,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // ============================================================
 
   final List<Map<String, dynamic>> _cart = [];
+
+  // ---- Hero carousel ----
+  final PageController _heroController = PageController();
+  Timer? _heroTimer;
+  int _heroIndex = 0;
+  Map<String, dynamic>? _livePromo; // promo of the week (from Firestore)
+
+  // ---- Product filter + list/grid view ----
+  bool _gridView = false;
+  String _typeFilter = 'All'; // All | Products | Services
+  String _sortBy = 'Featured'; // Featured | Price: low to high | Price: high to low | Name: A-Z
+  double? _maxPrice; // null = no limit
   final Set<String> _favourites = {};
 
   // ============================================================
@@ -93,10 +110,32 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   ImageProvider _img(String path) =>
       path.startsWith('http') ? NetworkImage(path) : AssetImage(path);
 
+  /// Picks the live "promo of the week" (active, started, not expired).
+  void _capturePromo(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    final now = DateTime.now();
+    Map<String, dynamic>? best;
+    DateTime bestCreated = DateTime.fromMillisecondsSinceEpoch(0);
+    for (final d in docs) {
+      final m = d.data();
+      if (m['kind'] != 'promo' || m['active'] != true) continue;
+      final starts = (m['startsAt'] as Timestamp?)?.toDate();
+      final ends = (m['endsAt'] as Timestamp?)?.toDate();
+      if (starts != null && starts.isAfter(now)) continue;
+      if (ends != null && ends.isBefore(now)) continue;
+      final created = (m['createdAt'] as Timestamp?)?.toDate() ?? bestCreated;
+      if (best == null || created.isAfter(bestCreated)) {
+        best = m;
+        bestCreated = created;
+      }
+    }
+    if (mounted) setState(() => _livePromo = best);
+  }
+
   void _listenToProducts() {
     _productsSub =
         _firestore.collection('products').snapshots().listen((snap) {
           // Keep the built-in list until products exist in Firestore.
+          _capturePromo(snap.docs);
           final docs = snap.docs.where((d) => d.data()['kind'] != 'promo').toList();
           if (docs.isEmpty) return;
           final items = docs.map((d) {
@@ -274,6 +313,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     super.initState();
     _loadUserFavorites();
     _listenToProducts();
+    _loadCart();
+    _loadViewPrefs();
+    _heroTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || !_heroController.hasClients) return;
+      final count = _livePromo != null ? 3 : 2;
+      final cur = _heroController.page?.round() ?? 0;
+      _heroController.animateToPage(
+        (cur + 1) % count,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeInOut,
+      );
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) PromoPopup.showIfAvailable(context);
     });
@@ -282,6 +333,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _heroTimer?.cancel();
+    _heroController.dispose();
     _productsSub?.cancel();
     super.dispose();
   }
@@ -341,9 +394,32 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       final bool matchesCategory =
           _selectedCategory == 'All' || service['category'] == _selectedCategory;
 
-      return matchesSearch && matchesCategory;
-    }).toList();
+      final bool isProduct = service['isProduct'] == true;
+      final bool matchesType = _typeFilter == 'All' ||
+          (_typeFilter == 'Products' && isProduct) ||
+          (_typeFilter == 'Services' && !isProduct);
+
+      final bool matchesPrice =
+          _maxPrice == null || (service['price'] as num).toDouble() <= _maxPrice!;
+
+      return matchesSearch && matchesCategory && matchesType && matchesPrice;
+    }).toList()
+      ..sort((a, b) {
+        switch (_sortBy) {
+          case 'Price: low to high':
+            return (a['price'] as num).compareTo(b['price'] as num);
+          case 'Price: high to low':
+            return (b['price'] as num).compareTo(a['price'] as num);
+          case 'Name: A-Z':
+            return a['name'].toString().toLowerCase().compareTo(b['name'].toString().toLowerCase());
+          default:
+            return 0; // Featured = the order the owner added them
+        }
+      });
   }
+
+  int get _activeFilterCount =>
+      (_typeFilter != 'All' ? 1 : 0) + (_sortBy != 'Featured' ? 1 : 0) + (_maxPrice != null ? 1 : 0);
 
   // ============================================================
   // CART LOGIC
@@ -365,6 +441,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
 
     setState(() {});
+    _saveCart();
     _showMessage('${service['name']} added to cart.', isError: false);
   }
 
@@ -372,6 +449,75 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     setState(() {
       _cart.removeAt(index);
     });
+    _saveCart();
+  }
+
+  // ---- Cart is saved on the phone (per user) so it survives closing the app.
+  // Only plain values are stored; the icon is rebuilt from the category.
+  String get _cartKey => 'kk_cart_${_auth.currentUser?.uid ?? 'guest'}';
+
+  Future<void> _saveCart() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_cart.isEmpty) {
+        await prefs.remove(_cartKey);
+        return;
+      }
+      final plain = _cart
+          .map((i) => <String, dynamic>{
+        'id': i['id']?.toString(),
+        'name': (i['name'] ?? '').toString(),
+        'category': (i['category'] ?? '').toString(),
+        'description': (i['description'] ?? '').toString(),
+        'price': (i['price'] as num?) ?? 0,
+        'duration': (i['duration'] ?? '').toString(),
+        if (i['isProduct'] == true) 'isProduct': true,
+        if (i['image'] is String) 'image': i['image'],
+        'quantity': (i['quantity'] as num?)?.toInt() ?? 1,
+      })
+          .toList();
+      await prefs.setString(_cartKey, jsonEncode(plain));
+    } catch (e) {
+      debugPrint('Could not save cart: $e');
+    }
+  }
+
+  Future<void> _loadCart() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString(_cartKey);
+      if (saved == null || saved.isEmpty) return;
+      final list = (jsonDecode(saved) as List).cast<Map<String, dynamic>>();
+      if (!mounted) return;
+      setState(() {
+        for (final item in list) {
+          final id = item['id']?.toString();
+          if (_cart.any((c) => c['id'] == id)) continue; // added while loading
+          _cart.add({
+            ...item,
+            'icon': _iconFor((item['category'] ?? '').toString()),
+          });
+        }
+      });
+    } catch (e) {
+      debugPrint('Could not load cart: $e');
+    }
+  }
+
+  Future<void> _loadViewPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final grid = prefs.getBool('kk_grid_view') ?? false;
+      if (mounted) setState(() => _gridView = grid);
+    } catch (_) {}
+  }
+
+  Future<void> _setGridView(bool grid) async {
+    setState(() => _gridView = grid);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('kk_grid_view', grid);
+    } catch (_) {}
   }
 
   double get _cartTotal {
@@ -595,28 +741,37 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         ),
                       ),
                       const SizedBox(height: 25),
-                      Container(
-                        height: imagePath != null ? 180 : 100,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: lightPurple,
-                          borderRadius: BorderRadius.circular(20),
-                          image: imagePath != null
-                              ? DecorationImage(
-                            image: _img(imagePath),
-                            fit: BoxFit.cover,
-                          )
-                              : null,
-                        ),
-                        child: imagePath != null
-                            ? null
-                            : Icon(
-                          service['icon'] as IconData,
-                          size: 55,
-                          color: primaryPurple,
+                      GestureDetector(
+                        onTap: () => _openReviews(service),
+                        child: Container(
+                          height: imagePath != null ? 180 : 100,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: lightPurple,
+                            borderRadius: BorderRadius.circular(20),
+                            image: imagePath != null
+                                ? DecorationImage(
+                              image: _img(imagePath),
+                              fit: BoxFit.cover,
+                            )
+                                : null,
+                          ),
+                          child: imagePath != null
+                              ? null
+                              : Icon(
+                            service['icon'] as IconData,
+                            size: 55,
+                            color: primaryPurple,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 10),
+                      ReviewSummaryButton(
+                        productId: service['id'].toString(),
+                        productName: service['name'].toString(),
+                        isProduct: service['isProduct'] == true,
+                      ),
+                      const SizedBox(height: 10),
                       Text(
                         service['name'].toString(),
                         style: const TextStyle(
@@ -824,57 +979,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   ),
                 ),
                 const SizedBox(height: 25),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(22),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF6B3A82), Color(0xFF9156A1)],
-                    ),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'YOUR BEAUTY,\nYOUR WAY.',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Book your next appointment with Kotton Kandy.',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 15),
-                            ElevatedButton(
-                              onPressed: () => setState(() => _selectedIndex = 1),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: primaryPurple,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(15),
-                                ),
-                              ),
-                              child: const Text('BOOK NOW'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      const Icon(Icons.spa, color: Colors.white54, size: 80),
-                    ],
-                  ),
-                ),
+                _buildHeroCarousel(),
                 const SizedBox(height: 28),
                 _buildSectionTitle(
                   'Categories',
@@ -927,9 +1032,21 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 _buildSectionTitle(
                   _selectedCategory == 'All' ? 'Popular Services' : _selectedCategory,
                 ),
+                const SizedBox(height: 10),
+                _buildFilterBar(),
                 const SizedBox(height: 14),
                 if (_filteredServices.isEmpty)
                   _buildEmptyState()
+                else if (_gridView)
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 14,
+                    childAspectRatio: 0.66,
+                    children: _filteredServices.map(_buildServiceTile).toList(),
+                  )
                 else
                   ..._filteredServices.map(
                         (service) => Padding(
@@ -941,6 +1058,562 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+
+  // ============================================================
+  // REVIEWS (visible to every signed-in client)
+  // ============================================================
+
+  void _openReviews(Map<String, dynamic> service) {
+    showProductReviews(
+      context,
+      productId: service['id'].toString(),
+      productName: service['name'].toString(),
+      isProduct: service['isProduct'] == true,
+    );
+  }
+
+  // ============================================================
+  // HERO CAROUSEL: Book now / Promotion of the week / Earn points
+  // ============================================================
+
+  Widget _buildHeroCarousel() {
+    final promo = _livePromo;
+    final slides = <Widget>[
+      _heroBookNow(),
+      if (promo != null) _heroPromo(promo),
+      _heroPoints(),
+    ];
+    final int current = _heroIndex.clamp(0, slides.length - 1);
+    return Column(
+      children: [
+        SizedBox(
+          height: 215,
+          child: PageView(
+            controller: _heroController,
+            onPageChanged: (i) => setState(() => _heroIndex = i),
+            children: slides,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(
+            slides.length,
+                (i) => AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: i == current ? 20 : 7,
+              height: 7,
+              decoration: BoxDecoration(
+                color: i == current ? primaryPurple : Colors.grey[300],
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _heroBookNow() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+      decoration: BoxDecoration(
+        color: primaryPurple,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'YOUR BEAUTY,\nYOUR WAY.',
+                  style: TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.bold, height: 1.2),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Book your next appointment with Kotton Kandy.',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () => setState(() => _selectedIndex = 1),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: primaryPurple,
+                    minimumSize: Size.zero,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  ),
+                  child: const Text('BOOK NOW'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Icon(Icons.spa, color: Colors.white54, size: 80),
+        ],
+      ),
+    );
+  }
+
+  Widget _heroPromo(Map<String, dynamic> promo) {
+    final String title = (promo['title'] ?? 'Promotion of the week').toString();
+    final String text = (promo['description'] ?? promo['message'] ?? '').toString();
+    final String img = (promo['imageUrl'] ?? '').toString();
+    final DateTime? ends = (promo['endsAt'] as Timestamp?)?.toDate();
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: primaryPurple,
+        borderRadius: BorderRadius.circular(24),
+        image: img.startsWith('http')
+            ? DecorationImage(
+          image: NetworkImage(img),
+          fit: BoxFit.cover,
+          colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.45), BlendMode.darken),
+        )
+            : null,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.22),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text(
+              'PROMOTION OF THE WEEK',
+              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.6),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          if (text.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+            ),
+          ],
+          if (ends != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Valid until ${ends.day}/${ends.month}/${ends.year}',
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _heroPoints() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+      decoration: BoxDecoration(
+        color: fieldPurple,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'EARN POINTS\nWHILE YOU SHOP\nOR BOOK',
+                  style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.bold, height: 1.2),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  '+25 points per order  ·  +50 per appointment\n500 points = R100 credit',
+                  style: TextStyle(color: Colors.white, fontSize: 12.5),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Icon(Icons.stars_rounded, color: Colors.white70, size: 80),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // FILTER BAR + LIST / GRID TOGGLE
+  // ============================================================
+
+  Widget _buildFilterBar() {
+    final int n = _activeFilterCount;
+    return Row(
+      children: [
+        OutlinedButton.icon(
+          onPressed: _openFilterSheet,
+          icon: const Icon(Icons.tune, size: 18),
+          label: Text(n == 0 ? 'Filter' : 'Filter ($n)'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: primaryPurple,
+            side: BorderSide(color: n == 0 ? Colors.grey.shade300 : primaryPurple),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+        ),
+        if (n > 0)
+          TextButton(
+            onPressed: () => setState(() {
+              _typeFilter = 'All';
+              _sortBy = 'Featured';
+              _maxPrice = null;
+            }),
+            child: const Text('Clear', style: TextStyle(color: Colors.grey)),
+          ),
+        const Spacer(),
+        Container(
+          decoration: BoxDecoration(
+            color: lightPurple,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              _viewToggle(Icons.view_agenda_outlined, 'List view', !_gridView, () => _setGridView(false)),
+              _viewToggle(Icons.grid_view_rounded, 'Tile view', _gridView, () => _setGridView(true)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _viewToggle(IconData icon, String tip, bool on, VoidCallback onTap) {
+    return Tooltip(
+      message: tip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(9),
+          decoration: BoxDecoration(
+            color: on ? primaryPurple : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, size: 20, color: on ? Colors.white : primaryPurple),
+        ),
+      ),
+    );
+  }
+
+  void _openFilterSheet() {
+    final all = (_remoteItems ?? _sampleServices);
+    double top = 0;
+    for (final s in all) {
+      final v = (s['price'] as num).toDouble();
+      if (v > top) top = v;
+    }
+    top = ((top / 50).ceil() * 50).toDouble();
+    if (top < 100) top = 100;
+
+    String type = _typeFilter;
+    String sort = _sortBy;
+    double maxP = (_maxPrice ?? top).clamp(0, top).toDouble();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setM) => Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Filter & sort', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 18),
+                  const Text('Show', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: ['All', 'Products', 'Services']
+                        .map((t) => ChoiceChip(
+                      label: Text(t),
+                      selected: type == t,
+                      selectedColor: lightPurple,
+                      onSelected: (_) => setM(() => type = t),
+                    ))
+                        .toList(),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text('Sort by', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: ['Featured', 'Price: low to high', 'Price: high to low', 'Name: A-Z']
+                        .map((t) => ChoiceChip(
+                      label: Text(t),
+                      selected: sort == t,
+                      selectedColor: lightPurple,
+                      onSelected: (_) => setM(() => sort = t),
+                    ))
+                        .toList(),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      const Text('Maximum price', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      Text(maxP >= top ? 'Any' : 'R${maxP.toStringAsFixed(0)}',
+                          style: const TextStyle(color: primaryPurple, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  Slider(
+                    value: maxP,
+                    min: 0,
+                    max: top,
+                    divisions: (top / 10).round(),
+                    activeColor: primaryPurple,
+                    onChanged: (v) => setM(() => maxP = v),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => setM(() {
+                            type = 'All';
+                            sort = 'Featured';
+                            maxP = top;
+                          }),
+                          child: const Text('Reset'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              _typeFilter = type;
+                              _sortBy = sort;
+                              _maxPrice = maxP >= top ? null : maxP;
+                            });
+                            Navigator.pop(ctx);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryPurple,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Apply'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // TILE CARD (grid view: big clear picture)
+  // ============================================================
+
+  Widget _buildServiceTile(Map<String, dynamic> service) {
+    final String id = service['id'].toString();
+    final String? imagePath = service['image'];
+    return GestureDetector(
+      onTap: () => _showServiceDetails(service),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 10, offset: const Offset(0, 4)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () => _openReviews(service),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: lightPurple,
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                          image: imagePath != null
+                              ? DecorationImage(image: _img(imagePath), fit: BoxFit.cover)
+                              : null,
+                        ),
+                        child: imagePath != null
+                            ? null
+                            : Icon(service['icon'] as IconData, color: primaryPurple, size: 50),
+                      ),
+                    ),
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: GestureDetector(
+                        onTap: () => _toggleFavourite(service),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.92),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            _favourites.contains(id) ? Icons.favorite : Icons.favorite_border,
+                            color: _favourites.contains(id) ? Colors.red : Colors.grey,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 8,
+                      bottom: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.55),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.star, color: Color(0xFFF5A623), size: 13),
+                            SizedBox(width: 3),
+                            Text('Reviews', style: TextStyle(color: Colors.white, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 6, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    service['name'].toString(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'R${(service['price'] as num).toStringAsFixed(2)}',
+                          style: const TextStyle(color: primaryPurple, fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                      ),
+                      _cartAddButton(service),
+                      const SizedBox(width: 4),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // ADD-TO-CART BUTTON (same look in list view and grid view)
+  // ============================================================
+
+  Future<void> _toggleFavourite(Map<String, dynamic> service) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    final String serviceId = (service['id'] ?? service['title']).toString();
+    final favRef = _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('favorites')
+        .doc(serviceId);
+
+    setState(() {
+      if (_favourites.contains(serviceId)) {
+        _favourites.remove(serviceId);
+      } else {
+        _favourites.add(serviceId);
+      }
+    });
+
+    try {
+      if (_favourites.contains(serviceId)) {
+        await favRef.set({
+          'name': service['title'] ?? service['name'],
+          'price': service['price'],
+          'description': service['description'] ?? '',
+          'category': service['category'] ?? '',
+          if (service['image'] is String && (service['image'] as String).isNotEmpty)
+            'image': service['image'],
+          if (service['isProduct'] == true) 'isProduct': true,
+          'addedAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        await favRef.delete();
+      }
+    } catch (e) {
+      debugPrint('Could not update favourite: $e');
+    }
+  }
+
+  Widget _cartAddButton(Map<String, dynamic> service) {
+    return Container(
+      decoration: BoxDecoration(
+        color: primaryPurple,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: IconButton(
+        onPressed: () => _addToCart(service),
+        icon: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
@@ -999,25 +1672,28 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         ),
         child: Row(
           children: [
-            Container(
-              width: 82,
-              height: 82,
-              decoration: BoxDecoration(
-                color: lightPurple,
-                borderRadius: BorderRadius.circular(16),
-                image: imagePath != null
-                    ? DecorationImage(
-                  image: _img(imagePath),
-                  fit: BoxFit.cover,
-                )
-                    : null,
-              ),
-              child: imagePath != null
-                  ? null
-                  : Icon(
-                service['icon'] as IconData,
-                color: primaryPurple,
-                size: 40,
+            GestureDetector(
+              onTap: () => _openReviews(service),
+              child: Container(
+                width: 82,
+                height: 82,
+                decoration: BoxDecoration(
+                  color: lightPurple,
+                  borderRadius: BorderRadius.circular(16),
+                  image: imagePath != null
+                      ? DecorationImage(
+                    image: _img(imagePath),
+                    fit: BoxFit.cover,
+                  )
+                      : null,
+                ),
+                child: imagePath != null
+                    ? null
+                    : Icon(
+                  service['icon'] as IconData,
+                  color: primaryPurple,
+                  size: 40,
+                ),
               ),
             ),
             const SizedBox(width: 14),
@@ -1103,47 +1779,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     favourite ? Icons.favorite : Icons.favorite_border,
                     color: favourite ? Colors.red : Colors.grey,
                   ),
-                  onPressed: () async {
-                    final user = _auth.currentUser;
-                    if (user == null) return;
-
-                    final serviceId = service['id'] ?? service['title'];
-                    final favRef = _firestore
-                        .collection('users')
-                        .doc(user.uid)
-                        .collection('favorites')
-                        .doc(serviceId);
-
-                    setState(() {
-                      if (_favourites.contains(serviceId)) {
-                        _favourites.remove(serviceId);
-                      } else {
-                        _favourites.add(serviceId);
-                      }
-                    });
-
-                    if (_favourites.contains(serviceId)) {
-                      await favRef.set({
-                        'name': service['title'] ?? service['name'],
-                        'price': service['price'],
-                        'description': service['description'] ?? '',
-                        'addedAt': FieldValue.serverTimestamp(),
-                      });
-                    } else {
-                      await favRef.delete();
-                    }
-                  },
+                  onPressed: () => _toggleFavourite(service),
                 ),
-                Container(
-                  decoration: BoxDecoration(
-                    color: primaryPurple,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: IconButton(
-                    onPressed: () => _addToCart(service),
-                    icon: const Icon(Icons.add, color: Colors.white),
-                  ),
-                ),
+                _cartAddButton(service),
               ],
             ),
           ],
@@ -1198,7 +1836,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             child: Container(
               padding: const EdgeInsets.all(4),
               decoration: const BoxDecoration(
-                color: Colors.red,
+                color: Color(0xFFD32F2F),
                 shape: BoxShape.circle,
               ),
               child: Text(
@@ -1272,9 +1910,25 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       itemBuilder: (context, index) {
                         final item = _cart[index];
                         return ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: lightPurple,
-                            child: Icon(item['icon'], color: primaryPurple),
+                          leading: Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: lightPurple,
+                              borderRadius: BorderRadius.circular(12),
+                              image: (item['image'] is String && (item['image'] as String).isNotEmpty)
+                                  ? DecorationImage(
+                                image: _img(item['image'] as String),
+                                fit: BoxFit.cover,
+                              )
+                                  : null,
+                            ),
+                            child: (item['image'] is String && (item['image'] as String).isNotEmpty)
+                                ? null
+                                : Icon(
+                              (item['icon'] as IconData?) ?? Icons.shopping_bag_outlined,
+                              color: primaryPurple,
+                            ),
                           ),
                           title: Text(
                             item['name'],
@@ -1676,6 +2330,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             setState(() {
               _cart.clear();
             });
+            await _saveCart(); // order is complete: only now is the saved cart emptied
 
             final NavigatorState navigator = Navigator.of(context);
             await showDialog(
@@ -1756,11 +2411,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF7B3F98), Color(0xFF8E44AD)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: primaryPurple,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Column(
@@ -1830,6 +2481,22 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const OrdersScreen()),
+            ),
+          ),
+          _buildProfileMenuItem(
+            icon: Icons.verified_user_outlined,
+            title: "Appointment Verification",
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AppointmentVerificationScreen()),
+            ),
+          ),
+          _buildProfileMenuItem(
+            icon: Icons.location_on_outlined,
+            title: "Find the Salon",
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SalonLocationScreen()),
             ),
           ),
           _buildProfileMenuItem(
