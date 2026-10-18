@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'payment_service.dart';
 import 'paystack_checkout_screen.dart';
 import 'simulated_payment.dart';
+import 'legal_pages.dart';
 import 'credit_helper.dart';
 import 'orders.dart';
 import 'service_reviews.dart';
@@ -48,6 +49,7 @@ class _BookingPageState extends State<BookingPage> {
   DateTime? _selectedDate;
   String? _selectedTimeSlot;
   bool _isLoading = false;
+  bool _acceptedPolicy = false;
   File? _referenceImage;
   List<String> _availableTimeSlots = [];
 
@@ -407,6 +409,11 @@ class _BookingPageState extends State<BookingPage> {
       return;
     }
 
+    if (!_acceptedPolicy) {
+      _showMessage('Please read and agree to the booking policy before paying.');
+      return;
+    }
+
     final User? user = _auth.currentUser;
     if (user == null || user.email == null || user.email!.isEmpty) {
       _showMessage('Please log in with a valid email account before booking.');
@@ -599,6 +606,116 @@ class _BookingPageState extends State<BookingPage> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  // ------------------------------------------------------------
+  // Booking policy shown BEFORE the pay button. The client must tick the box.
+  // ------------------------------------------------------------
+  Widget _policyPoint(IconData icon, String title, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: primaryPurple),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.black87),
+                children: [
+                  TextSpan(text: '$title ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  TextSpan(text: text),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bookingPolicyCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: lightPurple,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: primaryPurple.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.gavel_outlined, color: primaryPurple, size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Please read before you book',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _policyPoint(
+            Icons.event_repeat,
+            'Rescheduling:',
+            'an additional fee of R${_rescheduleFee.toStringAsFixed(2)} is payable each time you '
+                'reschedule. This fee is non-refundable.',
+          ),
+          _policyPoint(
+            Icons.cancel_outlined,
+            'Cancelling:',
+            'if you cancel your booking, you forfeit 50% of the total amount you paid. '
+                'The other 50% is refunded to your original payment method.',
+          ),
+          _policyPoint(
+            Icons.shield_outlined,
+            'If the salon cancels:',
+            'you receive a full refund.',
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: Checkbox(
+                  value: _acceptedPolicy,
+                  activeColor: primaryPurple,
+                  onChanged: (v) => setState(() => _acceptedPolicy = v ?? false),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'I have read and agree to the booking policy.',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const TermsOfServicePage()),
+              ),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 30),
+                foregroundColor: primaryPurple,
+              ),
+              child: const Text('Read the full Terms of Service'),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _rescheduleSummary() {
@@ -990,7 +1107,11 @@ class _BookingPageState extends State<BookingPage> {
                 ),
               ),
             ],
-            const SizedBox(height: 30),
+            const SizedBox(height: 24),
+            if (!_isReschedule) ...[
+              _bookingPolicyCard(),
+              const SizedBox(height: 16),
+            ],
             SizedBox(
               width: double.infinity,
               height: 55,
