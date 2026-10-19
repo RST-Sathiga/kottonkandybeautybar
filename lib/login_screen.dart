@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'register.dart';
 import 'reset.dart';
@@ -158,25 +159,20 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ============================================================
+// ============================================================
   // LOGIN
   // ============================================================
 
   Future<void> _handleLogin() async {
-    final String email =
-    _emailController.text.trim();
-
-    final String password =
-        _passwordController.text;
+    final String email = _emailController.text.trim();
+    final String password = _passwordController.text;
 
     // ----------------------------------------------------------
     // VALIDATE EMAIL
     // ----------------------------------------------------------
 
     if (email.isEmpty) {
-      _showMessage(
-        'Please enter your email address.',
-      );
+      _showMessage('Please enter your email address.');
       return;
     }
 
@@ -185,9 +181,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
 
     if (!emailRegex.hasMatch(email)) {
-      _showMessage(
-        'Please enter a valid email address.',
-      );
+      _showMessage('Please enter a valid email address.');
       return;
     }
 
@@ -196,9 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
     // ----------------------------------------------------------
 
     if (password.isEmpty) {
-      _showMessage(
-        'Please enter your password.',
-      );
+      _showMessage('Please enter your password.');
       return;
     }
 
@@ -210,7 +202,28 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       // --------------------------------------------------------
-      // FIREBASE LOGIN
+      // 1. CHECK IF EMAIL EXISTS IN FIRESTORE (Safely isolated)
+      // --------------------------------------------------------
+      try {
+        final querySnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .where('email', isEqualTo: email)
+            .get();
+
+        if (querySnapshot.docs.isEmpty) {
+          _showMessage('No account linked to email');
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+      } catch (firestoreError) {
+        // If Firestore query fails, safely continue to Auth instead of crashing
+        print('Firestore check skipped: $firestoreError');
+      }
+
+      // --------------------------------------------------------
+      // 2. FIREBASE AUTH LOGIN
       // --------------------------------------------------------
 
       final UserCredential userCredential =
@@ -222,9 +235,7 @@ class _LoginScreenState extends State<LoginScreen> {
       User? user = userCredential.user;
 
       if (user == null) {
-        _showMessage(
-          'Login failed. Please try again.',
-        );
+        _showMessage('Login failed. Please try again.');
         return;
       }
 
@@ -233,13 +244,10 @@ class _LoginScreenState extends State<LoginScreen> {
       // --------------------------------------------------------
 
       await user.reload();
-
       user = _auth.currentUser;
 
       if (user == null) {
-        _showMessage(
-          'Unable to load your account.',
-        );
+        _showMessage('Unable to load your account.');
         return;
       }
 
@@ -248,23 +256,19 @@ class _LoginScreenState extends State<LoginScreen> {
       // --------------------------------------------------------
 
       if (!user.emailVerified) {
-        _showMessage(
-          'Please verify your email before logging in.',
-        );
+        _showMessage('Please verify your email before logging in.');
 
         if (!mounted) return;
 
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) =>
-                VerificationScreen(
-                  email: user?.email ?? email,
-                  type: VerificationType.emailVerification,
-                ),
+            builder: (context) => VerificationScreen(
+              email: user?.email ?? email,
+              type: VerificationType.emailVerification,
+            ),
           ),
         );
-
         return;
       }
 
@@ -283,61 +287,44 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (context) =>
-          const MarketplaceScreen(),
+          builder: (context) => const MarketplaceScreen(),
         ),
             (route) => false,
       );
     }
 
     // ----------------------------------------------------------
-    // FIREBASE ERRORS
+    // FIREBASE AUTH ERRORS
     // ----------------------------------------------------------
 
     on FirebaseAuthException catch (e) {
       String message;
 
       switch (e.code) {
-        case 'invalid-email':
-          message =
-          'Please enter a valid email address.';
-          break;
-
         case 'user-not-found':
-          message =
-          'No account was found with this email address.';
+        case 'invalid-email':
+          message = 'No account linked to email';
           break;
 
         case 'wrong-password':
         case 'invalid-credential':
-          message =
-          'Incorrect email or password.';
+          message = 'Password incorrect.';
           break;
 
         case 'user-disabled':
-          message =
-          'This account has been disabled.';
+          message = 'This account has been disabled.';
           break;
 
         case 'too-many-requests':
-          message =
-          'Too many login attempts. Please try again later.';
+          message = 'Too many login attempts. Please try again later.';
           break;
 
         case 'network-request-failed':
-          message =
-          'Network error. Please check your internet connection.';
-          break;
-
-        case 'operation-not-allowed':
-          message =
-          'Email/password authentication is not enabled in Firebase.';
+          message = 'Network error. Please check your internet connection.';
           break;
 
         default:
-          message =
-              e.message ??
-                  'Authentication failed. Please try again.';
+          message = e.message ?? 'Authentication failed. Please try again.';
       }
 
       _showMessage(message);
@@ -348,9 +335,7 @@ class _LoginScreenState extends State<LoginScreen> {
     // ----------------------------------------------------------
 
     catch (e) {
-      _showMessage(
-        'An unexpected error occurred. Please try again.',
-      );
+      _showMessage('An unexpected error occurred. Please try again.');
     }
 
     // ----------------------------------------------------------
