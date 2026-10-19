@@ -1,1 +1,38 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"kotton-kandy","appId":"1:62972437754:android:d54272021c49b850bf5543","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"kotton-kandy","configurations":{"android":"1:62972437754:android:d54272021c49b850bf5543","ios":"1:62972437754:ios:059fdb979122bdeabf5543","macos":"1:62972437754:ios:059fdb979122bdeabf5543","web":"1:62972437754:web:3ee50a514d05c385bf5543","windows":"1:62972437754:web:25af28d42c4ae4bbbf5543"}}}}}}
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ],
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "kotton-kandy",
+          "appId": "1:62972437754:android:d54272021c49b850bf5543",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "kotton-kandy",
+          "configurations": {
+            "android": "1:62972437754:android:d54272021c49b850bf5543",
+            "ios": "1:62972437754:ios:059fdb979122bdeabf5543",
+            "macos": "1:62972437754:ios:059fdb979122bdeabf5543",
+            "web": "1:62972437754:web:3ee50a514d05c385bf5543",
+            "windows": "1:62972437754:web:25af28d42c4ae4bbbf5543"
+          }
+        }
+      }
+    }
+  }
+}

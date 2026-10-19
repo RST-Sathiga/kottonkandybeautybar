@@ -11,7 +11,6 @@ import 'orders.dart';
 import 'client_chat_system.dart';
 import 'notifications_screen.dart';
 import 'notification_prefs_service.dart';
-import 'notification_service.dart';
 import 'appointment_verification.dart';
 import 'salon_info.dart';
 import 'settings.dart'; // Ensure settings is imported
@@ -26,32 +25,13 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-
   FirebaseAuth.instance.authStateChanges().listen((user) async {
     if (user == null) return;
     await syncUserProfile(user);
-    // Each step has its own try/catch so one failure can never stop the others.
-    // The phone's push token is saved FIRST: without it the server cannot send
-    // notifications when the app is closed.
     try {
       await FirebaseMessaging.instance.requestPermission();
-    } catch (e) {
-      debugPrint('Notification permission error: $e');
-    }
-    try {
       await NotificationPrefsService().registerToken();
-    } catch (e) {
-      debugPrint('Could not save push token: $e');
-    }
-    try {
-      await NotificationService.instance.init(
-        navigatorKey,
-        knownRoutes: {'/loyalty', '/booking', '/orders', '/chat', '/notifications', '/settings', '/verification', '/salon'},
-      );
-    } catch (e) {
-      debugPrint('Notification setup error: $e');
-    }
+    } catch (_) {}
   });
 
   runApp(const MyApp());

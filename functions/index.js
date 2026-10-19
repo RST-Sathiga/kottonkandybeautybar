@@ -1,6 +1,7 @@
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
-const { notify, notifyOptedInClients } = require('./notify');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { notify, notifyOptedInClients, notifyAdmins } = require('./notify');
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -23,11 +24,40 @@ function norm(s) {
   return String(s || '').toLowerCase().trim().replace(/[\s-]+/g, '_');
 }
 
-// 1. The salon (admin app) replies to a client in chat.
+// Best available display name for a client.
+async function clientName(uid) {
+  try {
+    const u = (await db.doc(`users/${uid}`).get()).data() || {};
+    return (
+      u.fullName || u.name || u.displayName ||
+      [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email || 'A client'
+    );
+  } catch (_) {
+    return 'A client';
+  }
+}
+
+// 1. Chat. The salon replies -> notify the client. A client writes -> notify the owner.
+// The salon (admin app) replies to a client in chat.
 // Matches client_chat_system.dart: chats/{clientId_salonId}/messages with senderType 'salon'.
 exports.onChatMessage = onDocumentCreated('chats/{chatId}/messages/{msgId}', async (event) => {
   const m = event.data.data();
-  if (m.senderType !== 'salon') return; // only notify the client, not the salon
+
+  // A client wrote: tell the owner (only when a human is needed, not while the chatbot is handling it).
+  if (m.senderType === 'client') {
+    const chatSnap = await db.doc(`chats/${event.params.chatId}`).get();
+    const c = chatSnap.exists ? chatSnap.data() : {};
+    if (c.awaitingSalon === true || c.isBotSession === false) {
+      await notifyAdmins({
+        title: `New message from ${c.clientName || 'a client'}`,
+        body: m.text ? String(m.text).slice(0, 100) : '📷 Sent a photo',
+        data: { route: '/notifications' },
+      });
+    }
+    return;
+  }
+
+  if (m.senderType !== 'salon') return; // below: only notify the client
 
   const chat = await db.doc(`chats/${event.params.chatId}`).get();
   const clientId = chat.exists ? chat.data().clientId : null;
@@ -39,6 +69,52 @@ exports.onChatMessage = onDocumentCreated('chats/{chatId}/messages/{msgId}', asy
     body: m.text ? String(m.text).slice(0, 100) : '📷 Sent you a photo',
     data: { route: '/chat' },
   });
+});
+
+// 1b. Test push: the app's "send a test notification" button calls this.
+// It checks every step of the push chain and returns exactly what is wrong.
+exports.sendTestPush = onCall(async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Please sign in first.');
+  const uid = req.auth.uid;
+  const delay = Math.min(Math.max(Number((req.data || {}).delaySeconds) || 0, 0), 20);
+
+  const user = ((await db.doc(`users/${uid}`).get()).data()) || {};
+  const tokens = user.fcmTokens || [];
+  const prefs = { push: true, email: true, promotions: false, ...(user.prefs || {}) };
+
+  if (!tokens.length) {
+    return {
+      ok: false,
+      reason:
+        'No push token is saved for your account, so the server has nowhere to send to. ' +
+        'Allow notifications for the app in your phone settings, fully close and reopen the app, ' +
+        'then try again. (Check the Run console for "Could not save push token".)',
+    };
+  }
+  if (!prefs.push) {
+    return { ok: false, reason: 'Push Notifications are switched OFF in your app Settings. Switch them on and try again.' };
+  }
+
+  if (delay) await new Promise((r) => setTimeout(r, delay * 1000));
+
+  const res = await admin.messaging().sendEachForMulticast({
+    tokens,
+    notification: { title: 'Test notification', body: 'It works! This arrived from the server.' },
+    data: { route: '/notifications' },
+    android: { priority: 'high', notification: { channelId: 'high_importance_channel' } },
+  });
+
+  const errors = res.responses.filter((r) => !r.success).map((r) => (r.error && r.error.code) || 'unknown');
+  if (res.successCount > 0) return { ok: true, sent: res.successCount, failed: res.failureCount };
+
+  return {
+    ok: false,
+    reason:
+      'Firebase refused to deliver the push (' + errors.join(', ') + '). ' +
+      (errors.some((e) => /not-registered|invalid-registration/.test(e))
+        ? 'The saved token is out of date: sign out, sign in again and retry.'
+        : 'Check that the Firebase Cloud Messaging API is enabled for the project and look at the function logs.'),
+  };
 });
 
 // 2. Product orders (marketplace checkout creates orders/{id} after Paystack is verified).
@@ -83,6 +159,16 @@ exports.onAppointmentUpdate = onDocumentUpdated('appointments/{id}', async (even
   const before = event.data.before.data();
   const after = event.data.after.data();
   if (!after.userId) return;
+
+  // The client sent (or replaced) their face photo -> tell the owner.
+  if (after.facePhotoUrl && before.facePhotoUrl !== after.facePhotoUrl) {
+    const who = await clientName(after.userId);
+    await notifyAdmins({
+      title: 'Face photo received',
+      body: `${who} sent a verification photo for ${after.serviceName || 'an appointment'} on ${dateText(after.date)} ${after.timeSlot || ''}. Open the admin page to check it.`.trim(),
+      data: { route: '/notifications' },
+    });
+  }
 
   const what = `${after.serviceName || 'Appointment'} on ${dateText(after.date)} at ${after.timeSlot || ''}`.trim();
 

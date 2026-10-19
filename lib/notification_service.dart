@@ -1,102 +1,357 @@
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import 'firebase_options.dart';
+import 'app_notification.dart';
 
-/// Must be a top-level function. Register it in main():
-///   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-@pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  // Messages with a "notification" payload are shown by the system automatically.
+const Color _purple = Color(0xFF6B3A82);
+
+/// The signed-in user's notifications, from your existing top-level
+/// `notifications` collection (documents have a `userId`).
+Query<Map<String, dynamic>>? _myNotifications() {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return null;
+  return FirebaseFirestore.instance
+      .collection('notifications')
+      .where('userId', isEqualTo: uid);
 }
 
-/// Handles showing notifications while the app is open, and routing when tapped.
-class NotificationService {
-  NotificationService._();
-  static final NotificationService instance = NotificationService._();
+/// In-app notification inbox.
+class NotificationsScreen extends StatelessWidget {
+  const NotificationsScreen({super.key});
 
-  final _local = FlutterLocalNotificationsPlugin();
-  GlobalKey<NavigatorState>? _navigatorKey;
+  IconData _icon(NotificationType t) {
+    switch (t) {
+      case NotificationType.messageReply:
+        return Icons.chat_bubble_outline;
+      case NotificationType.payment:
+        return Icons.payments_outlined;
+      case NotificationType.delivery:
+        return Icons.local_shipping_outlined;
+      case NotificationType.booking:
+        return Icons.event_available_outlined;
+      case NotificationType.loyalty:
+        return Icons.card_giftcard_outlined;
+      case NotificationType.promotion:
+        return Icons.local_offer_outlined;
+      case NotificationType.newItem:
+        return Icons.new_releases_outlined;
+      case NotificationType.other:
+        return Icons.notifications_none;
+    }
+  }
 
-  static const _channel = AndroidNotificationChannel(
-    'high_importance_channel',
-    'Salon notifications',
-    description: 'Messages, payments, delivery updates and offers',
-    importance: Importance.high,
+  String _when(DateTime? d) {
+    if (d == null) return '';
+    final diff = DateTime.now().difference(d);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inHours < 1) return '${diff.inMinutes} min ago';
+    if (diff.inDays < 1) return '${diff.inHours} h ago';
+    if (diff.inDays < 7) return '${diff.inDays} d ago';
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  }
+
+  /// Bottom sheet with the full title and message (scrolls if it is very long).
+  void _showFullMessage(BuildContext context, AppNotification n) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.8,
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 45,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: const Color(0xFFF3EAF6),
+                      child: Icon(_icon(n.type), color: _purple),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        n.title,
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_when(n.createdAt).isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(_when(n.createdAt),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                ],
+                const SizedBox(height: 14),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      n.body.isEmpty ? 'No further details.' : n.body,
+                      style: const TextStyle(fontSize: 15, height: 1.45),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(sheetContext),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _purple,
+                          side: const BorderSide(color: _purple),
+                          minimumSize: const Size.fromHeight(46),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('Close'),
+                      ),
+                    ),
+                    if (n.route != null) ...[
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            Navigator.of(context).pushNamed(n.route!);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _purple,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size.fromHeight(46),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text('Open'),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _markAllRead() async {
+    final q = _myNotifications();
+    if (q == null) return;
+    final unread = await q.where('read', isEqualTo: false).get();
+    if (unread.docs.isEmpty) return;
+    final batch = FirebaseFirestore.instance.batch();
+    for (final d in unread.docs) {
+      batch.update(d.reference, {'read': true});
+    }
+    await batch.commit();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _myNotifications();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Notifications', style: TextStyle(fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            tooltip: 'Send a test notification',
+            icon: const Icon(Icons.notifications_active_outlined, color: _purple),
+            onPressed: () => _sendTestNotification(context),
+          ),
+          TextButton(
+            onPressed: _markAllRead,
+            child: const Text('Mark all read', style: TextStyle(color: _purple)),
+          ),
+        ],
+      ),
+      body: query == null
+          ? const Center(child: Text('Please log in to see your notifications.'))
+          : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: query.snapshots(),
+        builder: (context, snap) {
+          if (snap.hasError) {
+            return const Center(child: Text('Could not load notifications'));
+          }
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator(color: _purple));
+          }
+
+          final items = snap.data!.docs.map(AppNotification.fromDoc).toList();
+          // Newest first (done here so no Firestore index is needed).
+          items.sort((a, b) {
+            final now = DateTime.now();
+            return (b.createdAt ?? now).compareTo(a.createdAt ?? now);
+          });
+
+          if (items.isEmpty) {
+            return const Center(child: Text('No notifications yet'));
+          }
+
+          return ListView.separated(
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, i) {
+              final n = items[i];
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: const Color(0xFFF3EAF6),
+                  child: Icon(_icon(n.type), color: _purple),
+                ),
+                title: Text(
+                  n.title,
+                  style: TextStyle(fontWeight: n.read ? FontWeight.normal : FontWeight.bold),
+                ),
+                subtitle: Text(
+                  n.body.isEmpty ? _when(n.createdAt) : '${n.body}\n${_when(n.createdAt)}',
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                isThreeLine: n.body.isNotEmpty,
+                trailing: n.read
+                    ? null
+                    : const Icon(Icons.circle, size: 10, color: _purple),
+                onTap: () {
+                  // Mark as read, then show the WHOLE message.
+                  FirebaseFirestore.instance
+                      .collection('notifications')
+                      .doc(n.id)
+                      .update({'read': true}).catchError((_) {});
+                  _showFullMessage(context, n);
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Bell icon with an unread count. Used in the marketplace header.
+class NotificationBell extends StatelessWidget {
+  const NotificationBell({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _myNotifications();
+
+    Widget bell(int count) {
+      return IconButton(
+        icon: Badge(
+          backgroundColor: const Color(0xFFD32F2F), // same red as the cart badge
+          textColor: Colors.white,
+          isLabelVisible: count > 0,
+          label: Text(count > 99 ? '99+' : '$count'),
+          child: const Icon(Icons.notifications_none, color: Colors.black87),
+        ),
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+        ),
+      );
+    }
+
+    if (query == null) return bell(0);
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: query.where('read', isEqualTo: false).snapshots(),
+      builder: (context, snap) => bell(snap.data?.docs.length ?? 0),
+    );
+  }
+}
+
+// ============================================================
+// Test notification: checks the whole push chain and tells you
+// exactly what is wrong. Tap the bell-with-ring icon, then press
+// the phone's Home button and wait ~10 seconds.
+// ============================================================
+
+Future<void> _sendTestNotification(BuildContext context) async {
+  final messenger = ScaffoldMessenger.of(context);
+
+  Future<void> info(String title, String message) {
+    return showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK', style: TextStyle(color: _purple)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String describe(Map<dynamic, dynamic> r) {
+    if (r['ok'] == true) {
+      return 'Push sent to ${r['sent']} device(s). If nothing appeared, check your '
+          'phone\'s notification and battery settings for this app.';
+    }
+    return (r['reason'] ?? 'The push could not be sent.').toString();
+  }
+
+  final callable = FirebaseFunctions.instance.httpsCallable(
+    'sendTestPush',
+    options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),
+  );
+  final future = callable.call({'delaySeconds': 10});
+
+  HttpsCallableResult? early;
+  try {
+    early = await future.timeout(const Duration(seconds: 3));
+  } on TimeoutException {
+    early = null; // it is waiting 10 seconds before sending: that is expected
+  } catch (e) {
+    await info('Test failed',
+        'Could not reach the server: $e\n\nMake sure the Cloud Functions are deployed '
+            '(firebase deploy --only functions).');
+    return;
+  }
+
+  if (early != null) {
+    await info('Test notification', describe(Map<dynamic, dynamic>.from(early.data as Map)));
+    return;
+  }
+
+  await info(
+    'Test started',
+    'A notification will be sent in about 10 seconds.\n\n'
+        'Press the phone\'s Home button NOW, so the app is in the background.',
   );
 
-  bool _initialized = false;
-  Set<String> _knownRoutes = {'/loyalty', '/booking', '/notifications'};
-
-  /// Safe to call more than once. Pass the same navigatorKey you give to MaterialApp,
-  /// and the named routes that exist in your MaterialApp `routes:` map.
-  /// Notifications pointing to any other route open the notifications inbox instead.
-  Future<void> init(
-      GlobalKey<NavigatorState> navigatorKey, {
-        Set<String>? knownRoutes,
-      }) async {
-    if (_initialized) return;
-    _initialized = true;
-    _navigatorKey = navigatorKey;
-    if (knownRoutes != null) _knownRoutes = knownRoutes;
-
-    await _local.initialize(
-      settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-        iOS: DarwinInitializationSettings(),
-      ),
-      onDidReceiveNotificationResponse: (resp) => _go(resp.payload),
+  future.then((res) {
+    messenger.showSnackBar(
+      SnackBar(content: Text(describe(Map<dynamic, dynamic>.from(res.data as Map)))),
     );
-
-    await _local
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(_channel);
-
-    // Show banners while the app is in the foreground on iOS.
-    await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-
-    // App open: FCM does not show a banner on Android, so we do.
-    FirebaseMessaging.onMessage.listen(_showForeground);
-
-    // Tapped while app was in background.
-    FirebaseMessaging.onMessageOpenedApp.listen((m) => _go(m.data['route'] as String?));
-
-    // Tapped while app was closed.
-    final initial = await FirebaseMessaging.instance.getInitialMessage();
-    if (initial != null) _go(initial.data['route'] as String?);
-  }
-
-  Future<void> _showForeground(RemoteMessage m) async {
-    final n = m.notification;
-    if (n == null) return;
-    await _local.show(
-      id: n.hashCode,
-      title: n.title,
-      body: n.body,
-      notificationDetails: NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channel.id,
-          _channel.name,
-          channelDescription: _channel.description,
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-        iOS: const DarwinNotificationDetails(),
-      ),
-      payload: m.data['route'] as String?,
-    );
-  }
-
-  void _go(String? route) {
-    if (route == null || route.isEmpty) return;
-    final target = _knownRoutes.contains(route) ? route : '/notifications';
-    _navigatorKey?.currentState?.pushNamed(target);
-  }
+  }).catchError((e) {
+    messenger.showSnackBar(SnackBar(content: Text('Test failed: $e')));
+  });
 }

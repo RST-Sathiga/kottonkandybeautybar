@@ -23,7 +23,7 @@ class _SupportScreenState extends State<SupportScreen> {
     },
     {
       "question": "How do I cancel or reschedule a booking?",
-      "answer": "Open the Refunds page to cancel or reschedule a booking. If you cancel because you cannot make it, you receive a 50% refund. If the salon cancels your appointment, you receive a full refund."
+      "answer": "Open the Refunds page to cancel or reschedule a booking. Rescheduling costs an additional R100.00 each time, paid when you reschedule, and is non-refundable. If you cancel, you forfeit 50% of the total amount you paid and the other 50% is refunded. If the salon cancels your appointment, you receive a full refund."
     },
     {
       "question": "What payment options do you accept?",
@@ -43,7 +43,15 @@ class _SupportScreenState extends State<SupportScreen> {
     },
     {
       "question": "What is the refund policy?",
-      "answer": "If you cancel a booking yourself, you receive a 50% refund of what you paid. If the salon cancels your booking, you receive a full refund. Approved refunds are sent back to your original payment method within 3-5 business days."
+      "answer": "If you cancel a booking yourself, you forfeit 50% of the total amount you paid and receive the other 50% back. Rescheduling costs an additional R100.00 each time, which is non-refundable. If the salon cancels your booking, you receive a full refund. Approved refunds are sent back to your original payment method within 3-5 business days."
+    },
+    {
+      "question": "Do I have to pay to reschedule?",
+      "answer": "Yes. Each time you reschedule, an additional fee of R100.00 is payable. The fee is non-refundable, and your original payment stays on the appointment. You are shown these rules and must agree to them before you pay for a booking."
+    },
+    {
+      "question": "Why am I asked to send a photo of my face?",
+      "answer": "For everyone's safety, the salon confirms who you are when you arrive. Before your appointment, open Profile > Appointment Verification and send a clear photo of your face. It is only used by the salon to verify you at your appointment."
     },
     {
       "question": "How do I contact customer support directly?",

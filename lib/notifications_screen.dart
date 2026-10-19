@@ -51,6 +51,111 @@ class NotificationsScreen extends StatelessWidget {
     return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   }
 
+  /// Bottom sheet with the full title and message (scrolls if it is very long).
+  void _showFullMessage(BuildContext context, AppNotification n) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.8,
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 45,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: const Color(0xFFF3EAF6),
+                      child: Icon(_icon(n.type), color: _purple),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        n.title,
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_when(n.createdAt).isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(_when(n.createdAt),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                ],
+                const SizedBox(height: 14),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      n.body.isEmpty ? 'No further details.' : n.body,
+                      style: const TextStyle(fontSize: 15, height: 1.45),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(sheetContext),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _purple,
+                          side: const BorderSide(color: _purple),
+                          minimumSize: const Size.fromHeight(46),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('Close'),
+                      ),
+                    ),
+                    if (n.route != null) ...[
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            Navigator.of(context).pushNamed(n.route!);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _purple,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size.fromHeight(46),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text('Open'),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _markAllRead() async {
     final q = _myNotifications();
     if (q == null) return;
@@ -116,21 +221,20 @@ class NotificationsScreen extends StatelessWidget {
                 ),
                 subtitle: Text(
                   n.body.isEmpty ? _when(n.createdAt) : '${n.body}\n${_when(n.createdAt)}',
-                  maxLines: 4,
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                 ),
                 isThreeLine: n.body.isNotEmpty,
                 trailing: n.read
                     ? null
                     : const Icon(Icons.circle, size: 10, color: _purple),
-                onTap: () async {
-                  await FirebaseFirestore.instance
+                onTap: () {
+                  // Mark as read, then show the WHOLE message.
+                  FirebaseFirestore.instance
                       .collection('notifications')
                       .doc(n.id)
-                      .update({'read': true});
-                  if (n.route != null && context.mounted) {
-                    Navigator.of(context).pushNamed(n.route!);
-                  }
+                      .update({'read': true}).catchError((_) {});
+                  _showFullMessage(context, n);
                 },
               );
             },

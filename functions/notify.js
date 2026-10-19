@@ -104,4 +104,16 @@ async function notifyOptedInClients(payload, batchSize = 200) {
   return ids.length;
 }
 
-module.exports = { notify, notifyOptedInClients };
+/**
+ * Notify the owner(s): every user listed in the `admins` collection.
+ * The owner receives it on their phone when they are signed in to the
+ * Kotton Kandy app with their admin account (that is what saves their phone's token).
+ */
+async function notifyAdmins({ title, body, data = {} }) {
+  const snap = await db.collection('admins').get();
+  await Promise.all(
+    snap.docs.map((d) => notify(d.id, { type: 'admin_alert', title, body, data }))
+  );
+}
+
+module.exports = { notify, notifyOptedInClients, notifyAdmins };
