@@ -240,7 +240,8 @@ class _ServiceReviewsScreenState extends State<ServiceReviewsScreen> {
       }
       _toast('Thanks for your review!');
     } catch (e) {
-      _toast('Could not save your review: $e');
+      debugPrint('Could not save review: $e');
+      _toast('Could not save your review. Please try again.');
     }
   }
 
@@ -272,7 +273,8 @@ class _ServiceReviewsScreenState extends State<ServiceReviewsScreen> {
       batch.delete(ref);
       await batch.commit();
     } catch (e) {
-      _toast('Could not delete: $e');
+      debugPrint('Could not delete review: $e');
+      _toast('Could not delete the review. Please try again.');
     }
   }
 
@@ -297,7 +299,30 @@ class _ServiceReviewsScreenState extends State<ServiceReviewsScreen> {
             .snapshots(),
         builder: (context, snap) {
           if (snap.hasError) {
-            return const Center(child: Text('Could not load reviews.'));
+            debugPrint('Reviews error: ${snap.error}');
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.rate_review_outlined, size: 48, color: _purple),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Reviews are not available right now.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Please try again in a little while.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+            );
           }
           if (!snap.hasData || _loadingAccess) {
             return const Center(
@@ -468,9 +493,10 @@ class _ReviewCardState extends State<_ReviewCard> {
       _replyCtrl.clear();
       if (mounted) setState(() => _replying = false);
     } catch (e) {
+      debugPrint('Could not reply: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Could not reply: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not send your reply. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _sending = false);
