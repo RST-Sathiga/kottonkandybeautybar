@@ -49,11 +49,35 @@ class _FavoritesPageState extends State<FavoritesPage> {
     return asset.isNotEmpty ? asset : null;
   }
 
-  num _priceFor(String id, Map<String, dynamic> fav) {
-    final live = _products[id]?['price'];
-    if (live is num) return live;
-    final saved = fav['price'];
-    return saved is num ? saved : 0;
+  /// Is a promo of the week live right now? (Sales set to run "with the promo" depend on it.)
+  bool get _promoLive {
+    final now = DateTime.now();
+    return _products.values.any((m) {
+      if (m['kind'] != 'promo' || m['active'] != true) return false;
+      final s = (m['startsAt'] as Timestamp?)?.toDate();
+      final e = (m['endsAt'] as Timestamp?)?.toDate();
+      if (s != null && now.isBefore(s)) return false;
+      if (e != null && now.isAfter(e)) return false;
+      return true;
+    });
+  }
+
+  /// [price] is what the customer pays now; [original] is set only while the item is on sale.
+  ({double price, double? original, double percent}) _priceInfo(String id, Map<String, dynamic> fav) {
+    final p = _products[id];
+    final live = p?['price'];
+    final double base = live is num ? live.toDouble() : (fav['price'] is num ? (fav['price'] as num).toDouble() : 0);
+    if (p != null) {
+      final double pct = ((p['salePercent'] as num?) ?? 0).toDouble();
+      final bool saleOn = p['saleActive'] == true &&
+          pct > 0 &&
+          pct < 100 &&
+          (p['saleMode'] != 'promo' || _promoLive);
+      if (saleOn) {
+        return (price: (base * (100 - pct)).round() / 100, original: base, percent: pct);
+      }
+    }
+    return (price: base, original: null, percent: 0);
   }
 
   IconData _iconFor(String id, Map<String, dynamic> fav) {
@@ -110,9 +134,10 @@ class _FavoritesPageState extends State<FavoritesPage> {
           .doc(id)
           .delete();
     } catch (e) {
+      debugPrint('Could not remove favourite: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not remove favourite: $e')),
+        const SnackBar(content: Text('Could not remove the favourite. Please try again.')),
       );
     }
   }
@@ -183,7 +208,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
               final fav = doc.data();
               final name = (fav['name'] ?? '').toString();
               final description = (fav['description'] ?? '').toString();
-              final price = _priceFor(doc.id, fav);
+              final info = _priceInfo(doc.id, fav);
 
               return Container(
                 padding: const EdgeInsets.all(14),
@@ -227,10 +252,39 @@ class _FavoritesPageState extends State<FavoritesPage> {
                             ),
                           ],
                           const SizedBox(height: 8),
+                          if (info.original != null)
+                            Row(
+                              children: [
+                                Text(
+                                  'R${info.original!.toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 12,
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFD32F2F),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '-${info.percent.toStringAsFixed(0)}%',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           Text(
-                            'R${price.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              color: primaryPurple,
+                            'R${info.price.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              color: info.original != null ? const Color(0xFFD32F2F) : primaryPurple,
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
                             ),

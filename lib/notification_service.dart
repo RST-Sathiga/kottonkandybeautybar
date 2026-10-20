@@ -1,7 +1,4 @@
-import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -179,11 +176,6 @@ class NotificationsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Notifications', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
-          IconButton(
-            tooltip: 'Send a test notification',
-            icon: const Icon(Icons.notifications_active_outlined, color: _purple),
-            onPressed: () => _sendTestNotification(context),
-          ),
           TextButton(
             onPressed: _markAllRead,
             child: const Text('Mark all read', style: TextStyle(color: _purple)),
@@ -215,7 +207,7 @@ class NotificationsScreen extends StatelessWidget {
 
           return ListView.separated(
             itemCount: items.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, i) {
               final n = items[i];
               return ListTile(
@@ -283,75 +275,4 @@ class NotificationBell extends StatelessWidget {
       builder: (context, snap) => bell(snap.data?.docs.length ?? 0),
     );
   }
-}
-
-// ============================================================
-// Test notification: checks the whole push chain and tells you
-// exactly what is wrong. Tap the bell-with-ring icon, then press
-// the phone's Home button and wait ~10 seconds.
-// ============================================================
-
-Future<void> _sendTestNotification(BuildContext context) async {
-  final messenger = ScaffoldMessenger.of(context);
-
-  Future<void> info(String title, String message) {
-    return showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK', style: TextStyle(color: _purple)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String describe(Map<dynamic, dynamic> r) {
-    if (r['ok'] == true) {
-      return 'Push sent to ${r['sent']} device(s). If nothing appeared, check your '
-          'phone\'s notification and battery settings for this app.';
-    }
-    return (r['reason'] ?? 'The push could not be sent.').toString();
-  }
-
-  final callable = FirebaseFunctions.instance.httpsCallable(
-    'sendTestPush',
-    options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),
-  );
-  final future = callable.call({'delaySeconds': 10});
-
-  HttpsCallableResult? early;
-  try {
-    early = await future.timeout(const Duration(seconds: 3));
-  } on TimeoutException {
-    early = null; // it is waiting 10 seconds before sending: that is expected
-  } catch (e) {
-    await info('Test failed',
-        'Could not reach the server: $e\n\nMake sure the Cloud Functions are deployed '
-            '(firebase deploy --only functions).');
-    return;
-  }
-
-  if (early != null) {
-    await info('Test notification', describe(Map<dynamic, dynamic>.from(early.data as Map)));
-    return;
-  }
-
-  await info(
-    'Test started',
-    'A notification will be sent in about 10 seconds.\n\n'
-        'Press the phone\'s Home button NOW, so the app is in the background.',
-  );
-
-  future.then((res) {
-    messenger.showSnackBar(
-      SnackBar(content: Text(describe(Map<dynamic, dynamic>.from(res.data as Map)))),
-    );
-  }).catchError((e) {
-    messenger.showSnackBar(SnackBar(content: Text('Test failed: $e')));
-  });
 }

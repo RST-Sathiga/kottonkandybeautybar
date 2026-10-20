@@ -129,15 +129,26 @@ class _ReviewsSheetState extends State<_ReviewsSheet> {
       final parts = name.split(' ').where((p) => p.isNotEmpty).toList();
       final shown = parts.length > 1 ? '${parts.first} ${parts.last[0]}.' : name;
 
-      await _db.collection('reviews').doc(_myDocId).set({
-        'productId': widget.productId,
-        'productName': widget.productName,
-        'userId': user.uid,
-        'userName': shown,
-        'rating': _rating,
-        'comment': _commentCtrl.text.trim(),
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      final ref = _db.collection('reviews').doc(_myDocId);
+      final existing = await ref.get();
+      if (existing.exists) {
+        // Editing: only change the rating and comment, so the owner's reply is kept.
+        await ref.update({
+          'userName': shown,
+          'rating': _rating,
+          'comment': _commentCtrl.text.trim(),
+        });
+      } else {
+        await ref.set({
+          'productId': widget.productId,
+          'productName': widget.productName,
+          'userId': user.uid,
+          'userName': shown,
+          'rating': _rating,
+          'comment': _commentCtrl.text.trim(),
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('Thank you for your review!')));
@@ -368,6 +379,50 @@ class _ReviewsSheetState extends State<_ReviewsSheet> {
                             if ((r['comment'] ?? '').toString().isNotEmpty) ...[
                               const SizedBox(height: 4),
                               Text(r['comment'].toString()),
+                            ],
+                            if ((r['ownerReply'] ?? '').toString().trim().isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: _lightPurple,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 6, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: _purple,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Text('Salon',
+                                              style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold)),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        const Text('Kotton Kandy replied',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.w600, fontSize: 12.5)),
+                                        const Spacer(),
+                                        Text(_date(r['ownerReplyAt'] as Timestamp?),
+                                            style: TextStyle(
+                                                fontSize: 11, color: Colors.grey[600])),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(r['ownerReply'].toString(),
+                                        style: const TextStyle(fontSize: 13)),
+                                  ],
+                                ),
+                              ),
                             ],
                           ],
                         ),

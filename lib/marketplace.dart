@@ -17,6 +17,7 @@ import 'paystack_checkout_screen.dart';
 import 'simulated_payment.dart';
 import 'credit_helper.dart';
 import 'kiosk_picker_dialog.dart';
+import 'address_autocomplete.dart';
 import 'booking_page.dart';
 import 'refunds.dart';
 import 'package:provider/provider.dart';
@@ -78,7 +79,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   // ---- Product filter + list/grid view ----
   bool _gridView = false;
-  String _typeFilter = 'All'; // All | Products | Services
   String _sortBy = 'Featured'; // Featured | Price: low to high | Price: high to low | Name: A-Z
   double? _maxPrice; // null = no limit
   final Set<String> _favourites = {};
@@ -89,6 +89,47 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   List<Map<String, dynamic>>? _remoteItems;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _productsSub;
+  // Home banner edited by the admin (settings/banner).
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _bannerSub;
+  List<Map<String, dynamic>> _banners = [];
+
+  // The admin can add 1 to 5 banners (settings/banner -> banners).
+  static const int _maxBanners = 5;
+
+  void _listenToBanner() {
+    _bannerSub = _firestore
+        .collection('settings')
+        .doc('banner')
+        .snapshots()
+        .listen((snap) {
+      if (mounted) setState(() => _banners = _parseBanners(snap.data()));
+    }, onError: (_) {});
+  }
+
+  /// Reads the banner list. Supports the new format (`banners` = a list of up
+  /// to 5 banners) and the old format (one banner stored on the document itself).
+  List<Map<String, dynamic>> _parseBanners(Map<String, dynamic>? data) {
+    if (data == null) return [];
+    final List<Map<String, dynamic>> source = [];
+    final raw = data['banners'];
+    if (raw is List) {
+      for (final b in raw) {
+        if (b is Map) source.add(Map<String, dynamic>.from(b));
+      }
+    } else {
+      source.add(data); // old single-banner format
+    }
+    bool hasContent(Map<String, dynamic> b) => [
+      'title',
+      'subtitle',
+      'buttonText',
+      'imageUrl',
+    ].any((k) => (b[k] ?? '').toString().trim().isNotEmpty);
+    return source
+        .where((b) => b['active'] != false && hasContent(b))
+        .take(_maxBanners)
+        .toList();
+  }
 
   IconData _iconFor(String category) {
     switch (category) {
@@ -96,6 +137,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         return Icons.content_cut;
       case 'Nails':
         return Icons.brush;
+      case 'Press-ons':
+        return Icons.back_hand;
       case 'Makeup':
         return Icons.face;
       case 'Lashes':
@@ -147,12 +190,24 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             final deleteAt = data['pendingDeletion'] == true
                 ? (data['deleteAt'] as Timestamp?)?.toDate()
                 : null;
+            // Sale: the owner puts items on sale in the admin page. A sale set to run
+            // "with the promo of the week" is only on while a promo is live.
+            final double basePrice = ((data['price'] as num?) ?? 0).toDouble();
+            final double salePct = ((data['salePercent'] as num?) ?? 0).toDouble();
+            final bool saleOn = data['saleActive'] == true &&
+                salePct > 0 &&
+                salePct < 100 &&
+                (data['saleMode'] != 'promo' || _livePromo != null);
+            final double finalPrice =
+            saleOn ? (basePrice * (100 - salePct)).round() / 100 : basePrice;
             return <String, dynamic>{
               'id': d.id,
               'name': data['name'] ?? '',
               'category': category,
               'description': data['description'] ?? '',
-              'price': (data['price'] as num?) ?? 0,
+              'price': finalPrice,
+              if (saleOn) 'originalPrice': basePrice,
+              if (saleOn) 'salePercent': salePct,
               'duration': data['duration'] ?? 'Product',
               if (data['isProduct'] == true) 'isProduct': true,
               'icon': _iconFor(category),
@@ -161,6 +216,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             };
           }).toList();
           if (mounted) setState(() => _remoteItems = items);
+          _repriceCart(items);
         }, onError: (_) {});
   }
 
@@ -168,74 +224,41 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // CATEGORIES
   // ============================================================
 
-  final List<Map<String, dynamic>> _categories = [
-    {'name': 'All', 'icon': Icons.apps},
-    {'name': 'Hair', 'icon': Icons.content_cut},
-    {'name': 'Nails', 'icon': Icons.brush},
-    {'name': 'Makeup', 'icon': Icons.face},
-    {'name': 'Lashes', 'icon': Icons.remove_red_eye},
-    {'name': 'Skincare', 'icon': Icons.spa},
-  ];
+  /// Only real products (no services), hiding ones that are already leaving.
+  List<Map<String, dynamic>> get _productItems {
+    final DateTime now = DateTime.now();
+    return (_remoteItems ?? _sampleServices).where((item) {
+      if (item['isProduct'] != true) return false;
+      final DateTime? deleteAt = item['deleteAt'] as DateTime?;
+      return deleteAt == null || deleteAt.isAfter(now);
+    }).toList();
+  }
+
+  /// Categories come from the products the client can actually see.
+  List<Map<String, dynamic>> get _categories {
+    final List<String> names = [];
+    for (final p in _productItems) {
+      final String c = (p['category'] ?? '').toString().trim();
+      if (c.isNotEmpty && !names.contains(c)) names.add(c);
+    }
+    return <Map<String, dynamic>>[
+      {'name': 'All', 'icon': Icons.apps},
+      for (final n in names) {'name': n, 'icon': _iconFor(n)},
+    ];
+  }
+
+  /// The selected category, or 'All' if that category no longer has products.
+  String get _activeCategory {
+    return _categories.any((c) => c['name'] == _selectedCategory)
+        ? _selectedCategory
+        : 'All';
+  }
 
   // ============================================================
-  // SAMPLE SERVICES
+  // SAMPLE PRODUCTS (shown until the admin adds products)
   // ============================================================
 
   final List<Map<String, dynamic>> _sampleServices = [
-    {
-      'id': 'hair_braiding',
-      'name': 'Hair Braiding',
-      'category': 'Hair',
-      'description': 'Professional braiding and protective hairstyles.',
-      'price': 350.00,
-      'duration': '2 hrs',
-      'icon': Icons.content_cut,
-    },
-    {
-      'id': 'gel_nails',
-      'name': 'Gel Nails',
-      'category': 'Nails',
-      'description': 'Beautiful long-lasting gel nail application.',
-      'price': 250.00,
-      'duration': '1 hr 30 min',
-      'icon': Icons.brush,
-    },
-    {
-      'id': 'makeup',
-      'name': 'Professional Makeup',
-      'category': 'Makeup',
-      'description': 'Professional makeup for events and special occasions.',
-      'price': 450.00,
-      'duration': '1 hr 30 min',
-      'icon': Icons.face,
-    },
-    {
-      'id': 'lashes',
-      'name': 'Lash Extensions',
-      'category': 'Lashes',
-      'description': 'Enhance your look with beautiful lash extensions.',
-      'price': 300.00,
-      'duration': '1 hr',
-      'icon': Icons.remove_red_eye,
-    },
-    {
-      'id': 'facial',
-      'name': 'Luxury Facial',
-      'category': 'Skincare',
-      'description': 'Relaxing facial treatment for healthy glowing skin.',
-      'price': 400.00,
-      'duration': '1 hr',
-      'icon': Icons.spa,
-    },
-    {
-      'id': 'hair_wash',
-      'name': 'Hair Wash & Treatment',
-      'category': 'Hair',
-      'description': 'Deep cleansing and nourishing hair treatment.',
-      'price': 220.00,
-      'duration': '1 hr',
-      'icon': Icons.water_drop,
-    },
     {
       'id': 'aki_shampoo',
       'name': 'Aki Asili Clarifying Shampoo',
@@ -313,11 +336,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     super.initState();
     _loadUserFavorites();
     _listenToProducts();
+    _listenToBanner();
     _loadCart();
     _loadViewPrefs();
     _heroTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!mounted || !_heroController.hasClients) return;
-      final count = _livePromo != null ? 3 : 2;
+      final count = _heroSlides().length;
       final cur = _heroController.page?.round() ?? 0;
       _heroController.animateToPage(
         (cur + 1) % count,
@@ -336,6 +360,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     _heroTimer?.cancel();
     _heroController.dispose();
     _productsSub?.cancel();
+    _bannerSub?.cancel();
     super.dispose();
   }
 
@@ -377,32 +402,22 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   List<Map<String, dynamic>> get _filteredServices {
     final String search = _searchController.text.trim().toLowerCase();
+    final String category = _activeCategory;
 
-    final DateTime now = DateTime.now();
+    return _productItems.where((product) {
+      final String name = product['name'].toString().toLowerCase();
+      final String cat = product['category'].toString().toLowerCase();
 
-    return (_remoteItems ?? _sampleServices).where((service) {
-      final DateTime? deleteAt = service['deleteAt'] as DateTime?;
-      if (deleteAt != null && !deleteAt.isAfter(now)) return false;
-
-      final String name = service['name'].toString().toLowerCase();
-      final String category = service['category'].toString().toLowerCase();
-
-      final bool matchesSearch = search.isEmpty ||
-          name.contains(search) ||
-          category.contains(search);
+      final bool matchesSearch =
+          search.isEmpty || name.contains(search) || cat.contains(search);
 
       final bool matchesCategory =
-          _selectedCategory == 'All' || service['category'] == _selectedCategory;
-
-      final bool isProduct = service['isProduct'] == true;
-      final bool matchesType = _typeFilter == 'All' ||
-          (_typeFilter == 'Products' && isProduct) ||
-          (_typeFilter == 'Services' && !isProduct);
+          category == 'All' || product['category'] == category;
 
       final bool matchesPrice =
-          _maxPrice == null || (service['price'] as num).toDouble() <= _maxPrice!;
+          _maxPrice == null || (product['price'] as num).toDouble() <= _maxPrice!;
 
-      return matchesSearch && matchesCategory && matchesType && matchesPrice;
+      return matchesSearch && matchesCategory && matchesPrice;
     }).toList()
       ..sort((a, b) {
         switch (_sortBy) {
@@ -419,7 +434,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   int get _activeFilterCount =>
-      (_typeFilter != 'All' ? 1 : 0) + (_sortBy != 'Featured' ? 1 : 0) + (_maxPrice != null ? 1 : 0);
+      (_sortBy != 'Featured' ? 1 : 0) + (_maxPrice != null ? 1 : 0);
 
   // ============================================================
   // CART LOGIC
@@ -444,6 +459,38 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     _saveCart();
     _showMessage('${service['name']} added to cart.', isError: false);
   }
+
+  /// Cart lines saved on the phone can hold an old price. Refresh them from the live list
+  /// so a sale that has ended is never charged, and a new sale is applied.
+  void _repriceCart(List<Map<String, dynamic>> items) {
+    bool changed = false;
+    for (final c in _cart) {
+      for (final i in items) {
+        if (i['id'].toString() != c['id'].toString()) continue;
+        final num fresh = i['price'] as num;
+        if ((c['price'] as num?) != fresh) {
+          c['price'] = fresh;
+          changed = true;
+        }
+        break;
+      }
+    }
+    if (changed && mounted) {
+      setState(() {});
+      _saveCart();
+    }
+  }
+
+  int get _saleCount => (_remoteItems ?? const <Map<String, dynamic>>[])
+      .where((i) => i['originalPrice'] != null)
+      .length;
+
+  double get _maxSalePercent =>
+      (_remoteItems ?? const <Map<String, dynamic>>[]).fold<double>(0, (m, i) {
+        if (i['originalPrice'] == null) return m;
+        final double pct = (i['salePercent'] as num).toDouble();
+        return pct > m ? pct : m;
+      });
 
   void _removeFromCart(int index) {
     setState(() {
@@ -499,6 +546,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           });
         }
       });
+      final remote = _remoteItems;
+      if (remote != null) _repriceCart(remote);
     } catch (e) {
       debugPrint('Could not load cart: $e');
     }
@@ -742,9 +791,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       ),
                       const SizedBox(height: 25),
                       GestureDetector(
-                        onTap: () => _openReviews(service),
+                        onTap: imagePath != null
+                            ? () => showFullImage(context, imagePath,
+                            title: service['name'].toString())
+                            : null,
                         child: Container(
-                          height: imagePath != null ? 180 : 100,
+                          height: imagePath != null ? 200 : 100,
                           width: double.infinity,
                           decoration: BoxDecoration(
                             color: lightPurple,
@@ -757,7 +809,32 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                 : null,
                           ),
                           child: imagePath != null
-                              ? null
+                              ? Align(
+                            alignment: Alignment.bottomRight,
+                            child: Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.55),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.zoom_out_map,
+                                        size: 14, color: Colors.white),
+                                    SizedBox(width: 4),
+                                    Text('Tap to enlarge',
+                                        style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 11)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          )
                               : Icon(
                             service['icon'] as IconData,
                             size: 55,
@@ -864,32 +941,34 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                               child: const Text('ADD TO CART'),
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: _isLoading
-                                  ? null
-                                  : () {
-                                Navigator.pop(context);
-                                final Map<String, dynamic> modifiedService = {
-                                  ...service,
-                                  'price': currentTotal,
-                                  'name': includeInstallation && isNails
-                                      ? '${service['name']} (+ Installation)'
-                                      : service['name'],
-                                };
-                                _bookAppointment(modifiedService);
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: primaryPurple,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 15,
+                          if (service['isProduct'] != true) ...[
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _isLoading
+                                    ? null
+                                    : () {
+                                  Navigator.pop(context);
+                                  final Map<String, dynamic> modifiedService = {
+                                    ...service,
+                                    'price': currentTotal,
+                                    'name': includeInstallation && isNails
+                                        ? '${service['name']} (+ Installation)'
+                                        : service['name'],
+                                  };
+                                  _bookAppointment(modifiedService);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: primaryPurple,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 15,
+                                  ),
                                 ),
+                                child: const Text('BOOK NOW'),
                               ),
-                              child: const Text('BOOK NOW'),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ],
@@ -962,7 +1041,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     controller: _searchController,
                     onChanged: (value) => setState(() {}),
                     decoration: InputDecoration(
-                      hintText: 'Search services...',
+                      hintText: 'Search products...',
                       prefixIcon: const Icon(Icons.search, color: primaryPurple),
                       suffixIcon: _searchController.text.isNotEmpty
                           ? IconButton(
@@ -994,7 +1073,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     separatorBuilder: (context, index) => const SizedBox(width: 12),
                     itemBuilder: (context, index) {
                       final category = _categories[index];
-                      final bool selected = _selectedCategory == category['name'];
+                      final bool selected = _activeCategory == category['name'];
 
                       return GestureDetector(
                         onTap: () => setState(() => _selectedCategory = category['name']),
@@ -1030,7 +1109,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 ),
                 const SizedBox(height: 28),
                 _buildSectionTitle(
-                  _selectedCategory == 'All' ? 'Popular Services' : _selectedCategory,
+                  _activeCategory == 'All' ? 'Products' : _activeCategory,
                 ),
                 const SizedBox(height: 10),
                 _buildFilterBar(),
@@ -1080,13 +1159,20 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // HERO CAROUSEL: Book now / Promotion of the week / Earn points
   // ============================================================
 
-  Widget _buildHeroCarousel() {
-    final promo = _livePromo;
-    final slides = <Widget>[
-      _heroBookNow(),
-      if (promo != null) _heroPromo(promo),
+  /// The admin's banners (1 to 5). If there are none, the built-in slides are shown.
+  List<Widget> _heroSlides() {
+    if (_banners.isNotEmpty) {
+      return [for (final b in _banners.take(_maxBanners)) _heroBanner(b)];
+    }
+    return <Widget>[
+      _heroBanner(null),
+      if (_livePromo != null) _heroPromo(_livePromo!),
       _heroPoints(),
     ];
+  }
+
+  Widget _buildHeroCarousel() {
+    final slides = _heroSlides();
     final int current = _heroIndex.clamp(0, slides.length - 1);
     return Column(
       children: [
@@ -1099,33 +1185,101 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           ),
         ),
         const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(
-            slides.length,
-                (i) => AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: i == current ? 20 : 7,
-              height: 7,
-              decoration: BoxDecoration(
-                color: i == current ? primaryPurple : Colors.grey[300],
-                borderRadius: BorderRadius.circular(10),
+        if (slides.length > 1)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(
+              slides.length,
+                  (i) => AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: i == current ? 20 : 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  color: i == current ? primaryPurple : Colors.grey[300],
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
           ),
-        ),
       ],
     );
   }
 
-  Widget _heroBookNow() {
+  /// What the banner button does: open the linked product (details sheet),
+  /// open the linked service on the booking page, or go to the Bookings tab.
+  void _openBannerLink(Map<String, dynamic>? b) {
+    final String linkId = (b?['linkId'] ?? '').toString();
+    if (linkId.isEmpty) {
+      setState(() => _selectedIndex = 1);
+      return;
+    }
+    final String type = (b?['linkType'] ?? '').toString();
+    final List<Map<String, dynamic>> all =
+        _remoteItems ?? _sampleServices;
+    final int at = all.indexWhere((i) => i['id'].toString() == linkId);
+    if (at < 0) {
+      _showMessage('Sorry, this item is no longer available.');
+      return;
+    }
+    final Map<String, dynamic> item = all[at];
+    if (item['isProduct'] == true || type == 'product') {
+      _showServiceDetails(item);
+    } else {
+      final String dur = (item['duration'] ?? '1 hr').toString();
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BookingPage(
+            preselectedService: {
+              'id': item['id'],
+              'name': item['name'],
+              'category': item['category'],
+              'description': item['description'],
+              'price': item['price'],
+              'durationMins': _minutesFrom(dur),
+              'duration': dur,
+              'icon': item['icon'],
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+  /// "1 hr 30 mins" -> 90
+  int _minutesFrom(String s) {
+    final h = RegExp(r'(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)', caseSensitive: false).firstMatch(s);
+    final m = RegExp(r'(\d+)\s*(?:m|min|mins|minute|minutes)', caseSensitive: false).firstMatch(s);
+    final total = (h != null ? (double.parse(h.group(1)!) * 60).round() : 0) +
+        (m != null ? int.parse(m.group(1)!) : 0);
+    return total > 0 ? total : (int.tryParse(s.trim()) ?? 60);
+  }
+
+  Widget _heroBanner(Map<String, dynamic>? b) {
+    String pick(String key, String fallback) {
+      final v = b != null ? (b[key] ?? '').toString().trim() : '';
+      return v.isNotEmpty ? v : fallback;
+    }
+    final String title = pick('title', 'YOUR BEAUTY,\nYOUR WAY.');
+    final String subtitle = pick('subtitle', 'Book your next appointment with Kotton Kandy.');
+    final bool linksProduct = (b?['linkType'] ?? '').toString() == 'product';
+    final String buttonText = pick('buttonText', linksProduct ? 'SHOP NOW' : 'BOOK NOW');
+    final String img = b != null ? (b['imageUrl'] ?? '').toString() : '';
+    final bool hasImg = img.startsWith('http');
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
       decoration: BoxDecoration(
         color: primaryPurple,
         borderRadius: BorderRadius.circular(24),
+        image: hasImg
+            ? DecorationImage(
+          image: NetworkImage(img),
+          fit: BoxFit.cover,
+          colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: 0.40), BlendMode.darken),
+        )
+            : null,
       ),
       child: Row(
         children: [
@@ -1134,20 +1288,22 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'YOUR BEAUTY,\nYOUR WAY.',
-                  style: TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.bold, height: 1.2),
+                Text(
+                  title,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.bold, height: 1.2),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Book your next appointment with Kotton Kandy.',
+                Text(
+                  subtitle,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton(
-                  onPressed: () => setState(() => _selectedIndex = 1),
+                  onPressed: () => _openBannerLink(b),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: primaryPurple,
@@ -1156,13 +1312,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   ),
-                  child: const Text('BOOK NOW'),
+                  child: Text(buttonText),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          const Icon(Icons.spa, color: Colors.white54, size: 80),
+          if (!hasImg) ...[
+            const SizedBox(width: 10),
+            const Icon(Icons.spa, color: Colors.white54, size: 80),
+          ],
         ],
       ),
     );
@@ -1182,7 +1340,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             ? DecorationImage(
           image: NetworkImage(img),
           fit: BoxFit.cover,
-          colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.45), BlendMode.darken),
+          colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: 0.45), BlendMode.darken),
         )
             : null,
       ),
@@ -1194,7 +1352,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.22),
+              color: Colors.white.withValues(alpha: 0.22),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Text(
@@ -1218,10 +1376,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               style: const TextStyle(color: Colors.white, fontSize: 13),
             ),
           ],
-          if (ends != null) ...[
+          if (ends != null || _saleCount > 0) ...[
             const SizedBox(height: 8),
             Text(
-              'Valid until ${ends.day}/${ends.month}/${ends.year}',
+              [
+                if (_saleCount > 0) 'Up to ${_maxSalePercent.toStringAsFixed(0)}% off selected items',
+                if (ends != null) 'Valid until ${ends.day}/${ends.month}/${ends.year}',
+              ].join('  ·  '),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: Colors.white70, fontSize: 12),
             ),
           ],
@@ -1285,7 +1448,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         if (n > 0)
           TextButton(
             onPressed: () => setState(() {
-              _typeFilter = 'All';
               _sortBy = 'Featured';
               _maxPrice = null;
             }),
@@ -1327,7 +1489,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   void _openFilterSheet() {
-    final all = (_remoteItems ?? _sampleServices);
+    final all = _productItems;
     double top = 0;
     for (final s in all) {
       final v = (s['price'] as num).toDouble();
@@ -1336,7 +1498,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     top = ((top / 50).ceil() * 50).toDouble();
     if (top < 100) top = 100;
 
-    String type = _typeFilter;
     String sort = _sortBy;
     double maxP = (_maxPrice ?? top).clamp(0, top).toDouble();
 
@@ -1358,20 +1519,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('Filter & sort', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 18),
-                  const Text('Show', style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: ['All', 'Products', 'Services']
-                        .map((t) => ChoiceChip(
-                      label: Text(t),
-                      selected: type == t,
-                      selectedColor: lightPurple,
-                      onSelected: (_) => setM(() => type = t),
-                    ))
-                        .toList(),
-                  ),
                   const SizedBox(height: 18),
                   const Text('Sort by', style: TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
@@ -1410,7 +1557,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       Expanded(
                         child: OutlinedButton(
                           onPressed: () => setM(() {
-                            type = 'All';
                             sort = 'Featured';
                             maxP = top;
                           }),
@@ -1423,7 +1569,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         child: ElevatedButton(
                           onPressed: () {
                             setState(() {
-                              _typeFilter = type;
                               _sortBy = sort;
                               _maxPrice = maxP >= top ? null : maxP;
                             });
@@ -1461,7 +1606,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 10, offset: const Offset(0, 4)),
+            BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 10, offset: const Offset(0, 4)),
           ],
         ),
         child: Column(
@@ -1469,7 +1614,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           children: [
             Expanded(
               child: GestureDetector(
-                onTap: () => _openReviews(service),
+                onTap: imagePath != null
+                    ? () => showFullImage(context, imagePath,
+                    title: service['name'].toString())
+                    : () => _openReviews(service),
                 child: Stack(
                   children: [
                     Positioned.fill(
@@ -1486,6 +1634,22 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                             : Icon(service['icon'] as IconData, color: primaryPurple, size: 50),
                       ),
                     ),
+                    if (service['originalPrice'] != null)
+                      Positioned(
+                        left: 8,
+                        top: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD32F2F),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            'SALE -${(service['salePercent'] as num).toStringAsFixed(0)}%',
+                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
                     Positioned(
                       right: 8,
                       top: 8,
@@ -1495,7 +1659,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.92),
+                            color: Colors.white.withValues(alpha: 0.92),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
@@ -1506,22 +1670,45 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         ),
                       ),
                     ),
+                    if (service['deleteAt'] != null)
+                      Positioned(
+                        left: 8,
+                        top: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            'Leaving soon',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.orange.shade800,
+                            ),
+                          ),
+                        ),
+                      ),
                     Positioned(
                       left: 8,
                       bottom: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.55),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.star, color: Color(0xFFF5A623), size: 13),
-                            SizedBox(width: 3),
-                            Text('Reviews', style: TextStyle(color: Colors.white, fontSize: 11)),
-                          ],
+                      child: GestureDetector(
+                        onTap: () => _openReviews(service),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.star, color: Color(0xFFF5A623), size: 13),
+                              SizedBox(width: 3),
+                              Text('Reviews', style: TextStyle(color: Colors.white, fontSize: 11)),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -1543,12 +1730,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      Expanded(
-                        child: Text(
-                          'R${(service['price'] as num).toStringAsFixed(2)}',
-                          style: const TextStyle(color: primaryPurple, fontWeight: FontWeight.bold, fontSize: 15),
-                        ),
-                      ),
+                      Expanded(child: _priceText(service, 15)),
                       _cartAddButton(service),
                       const SizedBox(width: 4),
                     ],
@@ -1565,6 +1747,35 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // ============================================================
   // ADD-TO-CART BUTTON (same look in list view and grid view)
   // ============================================================
+
+  Widget _priceText(Map<String, dynamic> service, double size, {bool end = false}) {
+    final double price = (service['price'] as num).toDouble();
+    final num? original = service['originalPrice'] as num?;
+    final Text now = Text(
+      'R${price.toStringAsFixed(2)}',
+      style: TextStyle(
+        color: original != null ? const Color(0xFFD32F2F) : primaryPurple,
+        fontWeight: FontWeight.bold,
+        fontSize: size,
+      ),
+    );
+    if (original == null) return now;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: end ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        Text(
+          'R${original.toStringAsFixed(2)}',
+          style: TextStyle(
+            color: Colors.grey[600],
+            fontSize: size - 4,
+            decoration: TextDecoration.lineThrough,
+          ),
+        ),
+        now,
+      ],
+    );
+  }
 
   Future<void> _toggleFavourite(Map<String, dynamic> service) async {
     final user = _auth.currentUser;
@@ -1664,7 +1875,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.07),
+              color: Colors.black.withValues(alpha: 0.07),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -1673,7 +1884,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         child: Row(
           children: [
             GestureDetector(
-              onTap: () => _openReviews(service),
+              onTap: imagePath != null
+                  ? () => showFullImage(context, imagePath,
+                  title: service['name'].toString())
+                  : () => _openReviews(service),
               child: Container(
                 width: 82,
                 height: 82,
@@ -1688,7 +1902,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       : null,
                 ),
                 child: imagePath != null
-                    ? null
+                    ? Align(
+                  alignment: Alignment.bottomRight,
+                  child: Container(
+                    margin: const EdgeInsets.all(4),
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.zoom_out_map,
+                        size: 12, color: Colors.white),
+                  ),
+                )
                     : Icon(
                   service['icon'] as IconData,
                   color: primaryPurple,
@@ -1724,48 +1950,51 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(
-                        service['isProduct'] == true
-                            ? Icons.inventory_2
-                            : Icons.access_time,
-                        size: 14,
-                        color: primaryPurple,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        service['duration'].toString(),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                      if (service['deleteAt'] != null) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            'Leaving soon',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.orange.shade800,
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Icon(
+                              service['isProduct'] == true
+                                  ? Icons.inventory_2
+                                  : Icons.access_time,
+                              size: 14,
+                              color: primaryPurple,
                             ),
-                          ),
-                        ),
-                      ],
-                      const Spacer(),
-                      Text(
-                        'R${(service['price'] as num).toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          color: primaryPurple,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                service['duration'].toString(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                            ),
+                            if (service['deleteAt'] != null) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Leaving soon',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.orange.shade800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      _priceText(service, 16, end: true),
                     ],
                   ),
                 ],
@@ -1807,7 +2036,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           const Icon(Icons.search_off, color: primaryPurple, size: 50),
           const SizedBox(height: 12),
           const Text(
-            'No services found',
+            'No products found',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 6),
@@ -2008,7 +2237,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           const SizedBox(height: 15),
           const Text('Your cart is empty', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          Text('Add a beauty service to get started.', style: TextStyle(color: Colors.grey[600])),
+          Text('Add a product to get started.', style: TextStyle(color: Colors.grey[600])),
         ],
       ),
     );
@@ -2059,6 +2288,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final TextEditingController cityController = TextEditingController();
     final TextEditingController postalCodeController = TextEditingController();
     KioskLocation? chosenKiosk;
+    PickedAddress? pickedAddress; // set when the customer picks a Google suggestion
 
     // STEP 1: DELIVERY SELECTION DIALOG
     final bool? deliveryConfirmed = await showDialog<bool>(
@@ -2099,8 +2329,39 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     if (selectedShipping['type'] == 'door') ...[
                       const Text('Delivery Address:', style: TextStyle(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.search, color: primaryPurple),
+                        label: Text(
+                          pickedAddress == null ? 'Search your address' : 'Change address',
+                          style: const TextStyle(color: primaryPurple),
+                        ),
+                        onPressed: () async {
+                          final PickedAddress? result = await showAddressSearch(context);
+                          if (result != null) {
+                            setModalState(() {
+                              pickedAddress = result;
+                              streetController.text =
+                              result.street.isNotEmpty ? result.street : result.formatted;
+                              cityController.text = result.city;
+                              postalCodeController.text = result.postalCode;
+                            });
+                          }
+                        },
+                      ),
+                      if (pickedAddress != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            pickedAddress!.formatted,
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ),
+                      const SizedBox(height: 8),
                       TextField(
                         controller: streetController,
+                        onChanged: (_) {
+                          if (pickedAddress != null) setModalState(() => pickedAddress = null);
+                        },
                         decoration: const InputDecoration(
                           labelText: 'Street Address',
                           border: OutlineInputBorder(),
@@ -2110,6 +2371,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: cityController,
+                        onChanged: (_) {
+                          if (pickedAddress != null) setModalState(() => pickedAddress = null);
+                        },
                         decoration: const InputDecoration(
                           labelText: 'City / Suburb',
                           border: OutlineInputBorder(),
@@ -2119,6 +2383,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: postalCodeController,
+                        onChanged: (_) {
+                          if (pickedAddress != null) setModalState(() => pickedAddress = null);
+                        },
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
                           labelText: 'Postal Code',
@@ -2138,7 +2405,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         onPressed: () async {
                           final KioskLocation? result = await showDialog<KioskLocation>(
                             context: context,
-                            builder: (context) => const KioskPickerDialog(),
+                            builder: (context) => KioskPickerDialog(
+                              nearLatitude: pickedAddress?.latitude,
+                              nearLongitude: pickedAddress?.longitude,
+                            ),
                           );
                           if (result != null) {
                             setModalState(() {
@@ -2312,6 +2582,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 'deliveryMethod': selectedShipping['title'] ?? 'Standard Delivery',
                 'shippingAddress': addressDetails,
                 'deliveryAddress': addressDetails,
+                'deliveryType': selectedShipping['type'] == 'kiosk' ? 'locker' : 'door',
+                if (selectedShipping['type'] == 'kiosk' && chosenKiosk != null)
+                  'locker': chosenKiosk!.toMap(),
+                if (selectedShipping['type'] != 'kiosk')
+                  'deliveryAddressData': pickedAddress != null
+                      ? pickedAddress!.toMap()
+                      : {
+                    'formatted': addressDetails,
+                    'street': streetController.text.trim(),
+                    'city': cityController.text.trim(),
+                    'postalCode': postalCodeController.text.trim(),
+                  },
                 'status': 'confirmed',
                 'paymentStatus': 'paid',
                 'paymentReference': initResult.reference,
@@ -2381,7 +2663,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       if (spinnerOpen && mounted) {
         Navigator.of(context, rootNavigator: true).pop();
       }
-      _showMessage('Error processing checkout: $e');
+      debugPrint('Checkout error: $e');
+      _showMessage('Something went wrong with your checkout. Please try again.');
     }
   }
 
@@ -2562,7 +2845,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),

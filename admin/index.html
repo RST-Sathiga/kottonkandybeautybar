@@ -13,6 +13,13 @@
         body{margin:0;font-family:Poppins,system-ui,sans-serif;background:var(--bg);color:var(--tx)}
         .hide{display:none!important}
         #login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+        /* Login background (same as the app's splash screen) */
+        #login{position:relative;overflow:hidden;background:#D9D6DE}
+        #login::before{content:"";position:absolute;inset:0;background:url("kottonkandy_background.jpeg") repeat-x 0 0/auto 100%;animation:kkslide var(--kkdur,20s) linear infinite}
+        #login::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.15)}
+        #login .box{position:relative;z-index:1}
+        @keyframes kkslide{from{background-position-x:0}to{background-position-x:calc(var(--kkw,1200px) * -1)}}
+        @media(prefers-reduced-motion:reduce){#login::before{animation:none}}
         .box{background:var(--card);padding:32px;border-radius:18px;width:100%;max-width:380px;box-shadow:0 8px 30px #0001}
         h1{margin:0 0 4px;color:var(--p);font-size:24px}
         .sub{color:var(--mu);margin:0 0 20px;font-size:14px}
@@ -43,6 +50,7 @@
         th{color:var(--mu);font-weight:600;font-size:12px;text-transform:uppercase}
         td select{margin:0;padding:6px;width:auto}
         img.th{width:40px;height:40px;border-radius:8px;object-fit:cover}
+        div.th{width:40px;height:40px;border-radius:8px;background:var(--bd)}
         .pform input,.pform textarea{margin-bottom:10px}
         .pstat{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}.pstat span{background:var(--bg);border-radius:10px;padding:6px 12px;font-size:13px}
         .pbar{height:10px;background:var(--bd);border-radius:6px;overflow:hidden;margin:10px 0}.pbar i{display:block;height:100%;width:0;background:var(--p);transition:width .2s}
@@ -52,6 +60,16 @@
         .uhead{display:flex;align-items:center;gap:16px;margin-bottom:14px}
         .uhead .big{width:84px;height:84px;border-radius:50%;object-fit:cover;background:var(--p);color:#fff;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;flex-shrink:0}
         .uhead h4{margin:0;font-size:22px}.uhead div{min-width:0;word-break:break-word}
+        .pcard{padding:0;overflow:hidden;gap:0;border-left-color:#ec407a}
+        .pcard.service{border-left-color:#8e24aa}
+        .pcard .pimg{width:100%;height:220px;object-fit:contain;display:block;background:var(--bd);cursor:zoom-in}
+        .pcard .pph{width:100%;height:170px;background:var(--bd);display:flex;align-items:center;justify-content:center;font-size:42px}
+        .pcard .pbody{padding:14px 16px 16px;display:flex;flex-direction:column;gap:8px;flex:1}
+        .pcard .ptop{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+        .pcard .ptop b{font-size:16px}.pcard .price{font-weight:700;white-space:nowrap}
+        .pcard .pdesc{font-size:13px;opacity:.8;flex:1}
+        .pcard .pact{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+        .pcard.pend{opacity:.75}
         .ustats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:14px 0}
         .ustat{background:var(--bg);border-radius:12px;padding:12px}.ustat b{display:block;font-size:22px;color:var(--p)}.ustat span{font-size:12px;color:var(--mu)}
         .ulist{font-size:13px;margin:6px 0 14px}.ulist div{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--bd)}
@@ -215,6 +233,8 @@
         .cal-cell.today{border:2px solid var(--pk)}
         .cal-cell.selected{background:var(--p);color:#fff}
         .cal-cell.selected .cal-num{color:#fff}
+        .cal-cell.blocked{background:#ffcdd2;color:#b71c1c}
+        .cal-cell.closed{opacity:.35;cursor:default}
         .cal-num{font-size:14px;font-weight:600}
         .cal-dots{display:flex;justify-content:center;gap:3px;margin-top:4px}
         .cal-dot{width:6px;height:6px;background:var(--pk);border-radius:50%}
@@ -256,6 +276,22 @@
         .chip.bs-cancelled,.chip.bs-failed{background:#ffcdd2;color:#b71c1c}
         .chip.bs-completed{background:#bbdefb;color:#0d47a1}
         .lbl{display:block;font-size:12px;color:var(--mu);margin:0 0 4px}
+
+        /* SALE */
+        .srow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 4px;border-bottom:1px solid var(--bd)}
+        .srow label{display:flex;align-items:center;gap:8px;flex:1;min-width:0;cursor:pointer}
+        .srow label input{width:auto;margin:0}
+        .srow label span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .srow small{color:var(--mu)}
+        .srow .sp{width:72px;margin:0;padding:6px 8px}
+        .salepill{display:inline-block;background:#ffebee;color:#c62828;border-radius:8px;padding:1px 8px;font-size:11px;font-weight:700;margin-left:4px;white-space:nowrap}
+        .salepill.promo{background:#f3e5f5;color:#6a1b9a}
+
+        /* USER CARDS */
+        .ucard{cursor:pointer;border-left-color:var(--pk);transition:transform .15s}
+        .ucard:hover{transform:translateY(-2px)}
+        .ucard .ustats{margin:0}
+        .bnprev{max-width:280px;width:100%;border-radius:14px;margin-bottom:12px;display:block}
     </style>
 </head>
 <body>
@@ -291,7 +327,7 @@
         <a data-t="issues">Reports<span class="badge hide" id="issueBadge"></span></a>
         <div class="grp">Marketing</div>
         <a data-t="promos">Promotional Emails</a>
-        <a data-t="weekly">Promo of the week</a>
+        <a data-t="weekly">Banner &amp; Promo</a>
         <a data-t="loyalty">Loyalty QR</a>
         <div class="grp"></div>
         <a id="alertToggle">🔔 Alerts: off</a>
@@ -302,6 +338,19 @@
         <!-- Bookings Section with Calendar & Filters -->
         <section id="bookings" class="hide">
             <h3>Bookings Management</h3>
+
+            <div class="card" id="availCard">
+                <b>My availability</b>
+                <p class="sub" style="margin:4px 0 12px">Tick the weekdays you work, then tap a date to block or unblock it. Red dates cannot be booked by clients in the app. Remember to press <b>Save availability</b>.</p>
+                <div class="chips" id="avWeek" style="margin-bottom:14px"></div>
+                <div class="cal-header">
+                    <button class="sec" onclick="avMonth(-1)">&lt; Prev</button>
+                    <b id="avTitle" style="font-size:18px"></b>
+                    <button class="sec" onclick="avMonth(1)">Next &gt;</button>
+                </div>
+                <div class="cal-grid" id="avGrid"></div>
+                <div style="margin-top:14px"><button id="avSave">Save availability</button><span id="avMsg" class="sub" style="margin-left:10px"></span></div>
+            </div>
 
             <div class="card">
                 <div class="cal-header">
@@ -365,11 +414,9 @@
             <div id="issueList"></div>
         </section>
         <section id="reviews" class="hide">
-            <h3>Reviews</h3>
-            <p class="sub">Client reviews for your products and your services. Anything doing badly (low average rating or several 1-2 star reviews) is flagged at the top with a short report. Service reviews also have a public reply thread: clients can reply to each other and you can reply as the salon.</p>
-            <div class="rv-chips" id="revKinds"></div>
+            <h3>Product reviews</h3>
+            <p class="sub">Every product with its client reviews. Products that are doing badly (low average rating or several 1-2 star reviews) are flagged at the top with a short report.</p>
             <div id="prodReport"></div>
-            <div id="svcReport" class="hide"></div>
         </section>
         <section id="orders" class="hide">
             <h3>Orders</h3>
@@ -382,6 +429,10 @@
                 <div class="sub" style="margin:0 0 10px">Sends one email to each client who has turned on <b>Promotional Alerts</b> in the app. It is sent from your own Gmail account, so nothing extra to pay.</div>
                 <input id="prSubject" placeholder="Subject, e.g. 20% off all press-on sets this weekend">
                 <textarea id="prBody" style="min-height:170px" placeholder="Write your message here. Each client sees it with 'Hi (their name),' at the top and an unsubscribe note at the bottom."></textarea>
+                <label class="lbl">Image to send with the email (optional)</label>
+                <input id="prFile" type="file" accept="image/*">
+                <img id="prPrev" class="bnprev hide" alt="Email image preview">
+                <button class="ghost hide" id="prImgClear" type="button" style="margin-bottom:12px">Remove image</button>
                 <label style="display:flex;gap:8px;align-items:center;font-size:14px;margin-bottom:10px"><input type="checkbox" id="prInApp" checked style="width:auto;margin:0"> Also send as an in-app notification</label>
                 <div class="pstat" id="prStats"></div>
                 <div class="pbar hide" id="prBarWrap"><i id="prBar"></i></div>
@@ -434,10 +485,25 @@
         </section>
         <section id="users" class="hide">
             <h3>Users</h3>
-            <div class="card" id="userTable"></div>
+            <div class="card fbar">
+                <div class="fsub"><input id="userSearch" type="search" placeholder="Search users by name, email or phone…" autocomplete="off"></div>
+                <div class="fmeta"><span id="userCount"></span></div>
+            </div>
+            <div class="bgrid" id="userTable"></div>
         </section>
         <section id="weekly" class="hide">
-            <h3>Promo of the week</h3>
+            <h3>Banner &amp; Promo of the week</h3>
+
+            <div class="card">
+                <b>App home banners</b>
+                <p class="sub" style="margin:4px 0 10px">These banners slide across the top of the app's home screen. Add anywhere from 1 to 5. Pick a product or service under "open" so the button takes the client straight to it. Leave the button text empty to use the default (BOOK NOW, or SHOP NOW for a product).</p>
+                <div id="bnList"></div>
+                <button class="ghost" id="bnAdd" type="button" style="margin-bottom:12px">+ Add banner</button>
+                <div class="sub" id="bnCount" style="margin-bottom:12px"></div>
+                <button class="sec" id="bnSave">Save banners</button>
+                <span id="bnMsg" class="sub" style="margin-left:10px"></span>
+            </div>
+
             <div class="card">
                 <p class="sub">The active promo pops up for customers every time they log in to the app, until its valid-until date. Only one promo is live at a time.</p>
                 <b id="wpFormTitle">New promo</b>
@@ -457,6 +523,7 @@
                 <button id="wpCancel" class="hide" style="margin-left:6px;background:#888">Cancel edit</button>
                 <span id="wpMsg" class="sub" style="margin-left:10px"></span>
             </div>
+            <div class="card" id="wpSale"></div>
             <div class="card" id="wpTable"></div>
         </section>
         <section id="analytics">
@@ -478,18 +545,59 @@
                 <div class="row">
                     <input id="pn" placeholder="Name">
                     <input id="pp" type="number" placeholder="Price (R)">
-                    <select id="pc"><option>Hair</option><option>Nails</option><option>Makeup</option><option>Lashes</option><option>Skincare</option></select>
+                    <select id="pc"><option>Hair</option><option>Press-ons</option><option>Nails</option><option>Makeup</option><option>Lashes</option><option>Skincare</option></select>
                     <select id="pt"><option value="product">Product</option><option value="service">Service</option></select>
-                    <input id="pdu" placeholder="Duration (services only)">
-                    <input id="pi" placeholder="Image URL">
+                    <input id="pdu" placeholder="Duration, e.g. 1 hr 30 mins (services only)">
+                    <input id="pf" type="file" accept="image/*" title="Product image from your device">
                     <input id="pd" placeholder="Description">
                 </div>
                 <button class="sec" id="addProd">Add</button>
-                <button id="seedBtn" style="margin-left:8px">Import the app's current items</button>
+                <button id="seedBtn" style="margin-left:8px">Import the app's products &amp; services</button>
+                <button id="saleBtn" style="margin-left:8px;background:#c62828">Manage sale items</button>
+                <span id="pMsg" class="sub" style="margin-left:10px"></span>
             </div>
-            <div class="card" id="prodTable"></div>
+            <div class="tabs" id="prodTabs"></div>
+            <div class="bgrid" id="prodTable"></div>
         </section>
     </main>
+</div>
+
+<div id="prodModal" class="modal hide" onclick="if(event.target===this)this.classList.add('hide')">
+    <div class="mbox">
+        <h4>Edit item</h4>
+        <div style="display:flex;flex-direction:column;gap:8px">
+            <input id="ep_n" placeholder="Name">
+            <input id="ep_p" type="number" placeholder="Price (R)">
+            <select id="ep_c"><option>Hair</option><option>Nails</option><option>Makeup</option><option>Lashes</option><option>Skincare</option><option>Press-ons</option></select>
+            <select id="ep_t"><option value="product">Product</option><option value="service">Service</option></select>
+            <input id="ep_du" placeholder="Duration, e.g. 1 hr 30 mins (services only)">
+            <input id="ep_d" placeholder="Description">
+            <div class="sub">Image (leave empty to keep the current one)</div>
+            <img id="ep_img" class="th" alt="" title="Click to view full image" onclick="showImg(this.src)" style="width:100%;max-height:240px;object-fit:contain;border-radius:10px;display:none;cursor:zoom-in;background:var(--bd)">
+            <input id="ep_f" type="file" accept="image/*">
+        </div>
+        <p class="sub" id="ep_msg"></p>
+        <button id="ep_save">Save changes</button>
+        <button class="sec" onclick="$('prodModal').classList.add('hide')">Cancel</button>
+    </div>
+</div>
+
+<div id="saleModal" class="modal hide">
+    <div class="mbox" style="max-width:580px">
+        <h4>Items on sale</h4>
+        <p class="sub">Tick the products and services you want on sale and set the % off for each. Customers see the new price in the shop, at checkout and when they book. Untick an item to take it off sale.</p>
+        <label class="lbl">When should the sale run?</label>
+        <select id="saleMode">
+            <option value="promo">Only while the Promo of the week is live (it stops by itself when the promo ends)</option>
+            <option value="always">Until I switch it off</option>
+        </select>
+        <div id="saleList" style="max-height:42vh;overflow:auto;margin:6px 0 10px"></div>
+        <div class="err" id="saleErr"></div>
+        <div class="mbtns">
+            <button class="ghost" id="saleCancel">Cancel</button>
+            <button id="saleSave">Save sale</button>
+        </div>
+    </div>
 </div>
 
 <div id="orderModal" class="modal hide">
@@ -606,7 +714,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
-    const COL = { bookings: 'appointments', users: 'users', products: 'products', admins: 'admins', chats: 'chats', notifications: 'notifications', refunds: 'refund_requests', orders: 'orders', issues: 'issues', reviews: 'reviews', verification: 'verification', svcReviews: 'service_reviews' };
+    const COL = { bookings: 'appointments', users: 'users', products: 'products', admins: 'admins', chats: 'chats', notifications: 'notifications', refunds: 'refund_requests', orders: 'orders', issues: 'issues', reviews: 'reviews', settings: 'settings' };
 
     firebase.initializeApp({
       apiKey: 'AIzaSyDMYIUD3vMTyuBhgIzwh-CQGh0Bi8jy_ug',
@@ -634,14 +742,23 @@
     let weeklyPromos = [], purgedOnce = false;
     let orders = [], orderTab = 'new', editOrder = null;
     let reviews = [], issues = [], issueTab = 'action', activeIssue = null, issueUnsub = null, issueMsgs = [];
-    let facePhotos = {};
-    let svcReviews = [], svcReplies = {}, svcReplyUnsubs = {}, revKind = 'products', svcFilter = 'all', svcOpen = {}, svcReplying = null, svcDraft = {};
     let refunds = [], refundTab = 'pending', refundErr = '', decision = null, psReq = null, psRef = '';
 
     // Calendar state variables
     let calDate = new Date();
     let selectedDateStr = null;
     let activeFilter = 'all';
+
+    // ---- Image upload (Cloudinary) shared by products, banner and promos ----
+    async function uploadImage(file) {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('upload_preset', 'profile_uploads');
+      const r = await fetch('https://api.cloudinary.com/v1_1/nuqsuqyw/image/upload', { method: 'POST', body: fd });
+      const j = await r.json();
+      if (!j.secure_url) throw new Error((j.error && j.error.message) || 'Upload failed');
+      return j.secure_url;
+    }
 
     // ---- Auth (Wrapped in DOMContentLoaded to prevent null reference issues) ----
     window.addEventListener('DOMContentLoaded', () => {
@@ -667,6 +784,22 @@
 
     $('logout').onclick = () => auth.signOut();
 
+    // Login background: endless leftward scroll like the app's splash screen.
+    // Measures one image tile so the loop is seamless.
+    (() => {
+      const img = new Image();
+      img.onload = () => {
+        const set = () => {
+          const l = $('login'), h = l.clientHeight || window.innerHeight;
+          const w = img.naturalWidth * h / img.naturalHeight;
+          l.style.setProperty('--kkw', w + 'px');
+          l.style.setProperty('--kkdur', Math.max(10, w / (0.0625 * window.innerWidth)) + 's');
+        };
+        set(); window.addEventListener('resize', set);
+      };
+      img.src = 'kottonkandy_background.jpeg';
+    })();
+
     auth.onAuthStateChanged(async user => {
       unsubs.forEach(u => u()); unsubs = [];
       if (msgUnsub) { msgUnsub(); msgUnsub = null; }
@@ -685,7 +818,7 @@
       a.classList.add('on');
       document.querySelectorAll('main section').forEach(s => s.classList.add('hide'));
       $(a.dataset.t).classList.remove('hide');
-      if (a.dataset.t === 'bookings') renderCalendar();
+      if (a.dataset.t === 'bookings') { renderCalendar(); renderAvail(); }
       if (a.dataset.t === 'loyalty') loadLoyaltyQr();
       if (a.dataset.t === 'lockers') initLockers();
       if (a.dataset.t === 'analytics') renderAnalytics();
@@ -697,24 +830,146 @@
       s => { loaded[col] = true; set(s.docs.map(d => ({ id: d.id, ...d.data() }))); render(); }, e => console.error(col, e)));
     function listen() {
       watch(COL.bookings, d => { bookings = d; renderCalendar(); });
-      watch(COL.verification, d => { facePhotos = Object.fromEntries(d.map(x => [x.id, x.photoUrl])); renderCalendar(); });
       watch(COL.users, d => users = d);
       watch(COL.products, d => {
         products = d.filter(x => x.kind !== 'promo');
         weeklyPromos = d.filter(x => x.kind === 'promo');
+        if ($('bnList')) renderBanners(); // keep the banner "Link to" lists up to date
         if (!purgedOnce) { purgedOnce = true; purgeExpiredProducts(); }
       });
       watch(COL.chats, d => chats = d);
       watch(COL.orders, d => orders = d);
       watch(COL.issues, d => issues = d);
       watch(COL.reviews, d => reviews = d);
-      watch(COL.svcReviews, d => { svcReviews = d; syncSvcReplyListeners(); });
-      unsubs.push(() => { Object.values(svcReplyUnsubs).forEach(u => u()); svcReplyUnsubs = {}; svcReplies = {}; });
       unsubs.push(db.collection(COL.refunds).onSnapshot(
         s => { loaded[COL.refunds] = true; refunds = s.docs.map(d => ({ id: d.id, ...d.data() })); refundErr = ''; render(); },
         e => { console.error(COL.refunds, e); refundErr = e.message; renderRefunds(); }));
+      // Availability (days the salon works / blocked dates)
+      unsubs.push(db.collection(COL.settings).doc('availability').onSnapshot(s => {
+        if (s.exists && !avDirty) {
+          const d = s.data();
+          av = { openWeekdays: Array.isArray(d.openWeekdays) ? d.openWeekdays : [0, 1, 2, 3, 4, 5, 6], blockedDates: Array.isArray(d.blockedDates) ? d.blockedDates : [] };
+        }
+        renderAvail();
+      }, e => { console.error('availability', e); $('avMsg').textContent = 'Could not load availability: ' + e.message; }));
+      // Home banner
+      unsubs.push(db.collection(COL.settings).doc('banner').onSnapshot(s => {
+        if (!s.exists || bnLoaded) return;
+        bnLoaded = true;
+        const d = s.data();
+        let list = [];
+        if (Array.isArray(d.banners)) list = d.banners.map(b => ({ title: b.title || '', subtitle: b.subtitle || '', buttonText: b.buttonText || '', imageUrl: b.imageUrl || '', active: b.active !== false, linkId: b.linkId || '', linkType: b.linkType || '', linkName: b.linkName || '' }));
+        else if (d.title || d.subtitle || d.imageUrl) list = [{ title: d.title || '', subtitle: d.subtitle || '', buttonText: d.buttonText || '', imageUrl: d.imageUrl || '', active: d.active !== false }];
+        while (list.length < BN_MIN) list.push(bnBlank());
+        bnList = list.slice(0, BN_MAX); renderBanners();
+      }, e => console.error('banner', e)));
       loadLoyaltyQr();
     }
+
+    // ---- Availability (admin chooses which days she works) ----
+    let avDate = new Date(), avDirty = false, av = { openWeekdays: [0, 1, 2, 3, 4, 5, 6], blockedDates: [] };
+    window.avMonth = d => { avDate.setDate(1); avDate.setMonth(avDate.getMonth() + d); renderAvail(); };
+    window.avToggleDay = i => { const s = new Set(av.openWeekdays); s.has(i) ? s.delete(i) : s.add(i); av.openWeekdays = [...s].sort(); avDirty = true; renderAvail(); };
+    window.avToggleDate = ds => { const s = new Set(av.blockedDates); s.has(ds) ? s.delete(ds) : s.add(ds); av.blockedDates = [...s].sort(); avDirty = true; renderAvail(); };
+    function renderAvail() {
+      if (!$('avGrid')) return;
+      const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const y = avDate.getFullYear(), m = avDate.getMonth(), today = SAST();
+      $('avWeek').innerHTML = names.map((n, i) => `<button class="${av.openWeekdays.includes(i) ? 'on' : ''}" onclick="avToggleDay(${i})">${n}</button>`).join('');
+      $('avTitle').textContent = avDate.toLocaleDateString([], { month: 'long', year: 'numeric' });
+      let h = names.map(d => `<div class="cal-day-head">${d}</div>`).join('');
+      for (let i = 0; i < new Date(y, m, 1).getDay(); i++) h += '<div class="cal-cell" style="opacity:.3;cursor:default"></div>';
+      for (let d = 1; d <= new Date(y, m + 1, 0).getDate(); d++) {
+        const ds = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`, wd = new Date(y, m, d).getDay();
+        const weekdayOff = !av.openWeekdays.includes(wd), past = ds < today, blocked = av.blockedDates.includes(ds);
+        const dead = weekdayOff || past;
+        h += `<div class="cal-cell ${blocked ? 'blocked' : ''} ${dead ? 'closed' : ''} ${ds === today ? 'today' : ''}" ${dead ? '' : `onclick="avToggleDate('${ds}')"`}><div class="cal-num">${d}</div>${blocked ? '<div style="font-size:10px">Blocked</div>' : (weekdayOff && !past ? '<div style="font-size:10px">Off</div>' : '')}</div>`;
+      }
+      $('avGrid').innerHTML = h;
+    }
+    $('avSave').onclick = async () => {
+      try {
+        const today = SAST();
+        const blockedDates = av.blockedDates.filter(d => d >= today).sort();
+        await db.collection(COL.settings).doc('availability').set({ openWeekdays: av.openWeekdays, blockedDates, updatedAt: FV.serverTimestamp() }, { merge: true });
+        av.blockedDates = blockedDates; avDirty = false; renderAvail();
+        const clash = bookings.filter(b => (blockedDates.includes(apptDay(b)) || !av.openWeekdays.includes(new Date(apptDay(b) + 'T00:00:00').getDay())) && apptDay(b) >= today && !['cancelled', 'failed', 'completed'].includes(bStatus(b))).length;
+        $('avMsg').textContent = 'Saved ✓' + (clash ? ` – ${clash} existing booking${clash === 1 ? '' : 's'} fall on days you are now unavailable. Reschedule them.` : '');
+      } catch (e) { $('avMsg').textContent = 'Failed: ' + e.message; }
+    };
+
+    // ---- Home banners (3 to 5 slides on the app's home screen) ----
+    const BN_MIN = 1, BN_MAX = 5;
+    let bnLoaded = false;
+    const bnBlank = () => ({ title: '', subtitle: '', buttonText: '', imageUrl: '', active: true, linkId: '', linkType: '', linkName: '' });
+    // Options for the "Link to" dropdown: the products and services the admin has added.
+    function bnLinkOptions(b) {
+      const live = products.filter(p => !p.pendingDeletion);
+      const opt = p => `<option value="${esc(p.id)}" ${b.linkId === p.id ? 'selected' : ''}>${esc(p.name)}</option>`;
+      const missing = b.linkId && !live.some(p => p.id === b.linkId)
+        ? `<option value="${esc(b.linkId)}" selected>${esc(b.linkName || 'Item')} (removed)</option>` : '';
+      return `<option value="">Bookings tab (default)</option>${missing}`
+        + `<optgroup label="Products">${live.filter(p => p.isProduct).map(opt).join('')}</optgroup>`
+        + `<optgroup label="Services">${live.filter(p => !p.isProduct).map(opt).join('')}</optgroup>`;
+    }
+    let bnList = [bnBlank()];
+    function renderBanners() {
+      $('bnList').innerHTML = bnList.map((b, i) => `
+        <div style="border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <b>Banner ${i + 1}</b>
+            ${bnList.length > BN_MIN ? `<button class="ghost" type="button" onclick="bnRemove(${i})">Remove</button>` : ''}
+          </div>
+          <div class="row">
+            <input placeholder="Title (e.g. YOUR BEAUTY, YOUR WAY.)" value="${esc(b.title)}" oninput="bnSet(${i},'title',this.value)">
+            <input placeholder="Text (e.g. Book your next appointment)" value="${esc(b.subtitle)}" oninput="bnSet(${i},'subtitle',this.value)">
+            <input placeholder="Button text (default: BOOK NOW, or SHOP NOW for a product)" value="${esc(b.buttonText)}" oninput="bnSet(${i},'buttonText',this.value)">
+            <input type="file" accept="image/*" title="Background image (optional)" onchange="bnUpload(${i},this)">
+          </div>
+          <label class="sub" style="display:block;margin:4px 0 10px">When a client taps the banner button, open:
+            <select onchange="bnSetLink(${i},this.value)">${bnLinkOptions(b)}</select>
+          </label>
+          ${b.imageUrl ? `<img class="bnprev" src="${esc(b.imageUrl)}" alt="Banner image" title="Click to view full image" onclick="showImg(this.src)" style="cursor:zoom-in"><button class="ghost" type="button" style="margin-bottom:12px" onclick="bnClearImg(${i})">Remove image</button>` : ''}
+          <label class="chk"><input type="checkbox" ${b.active ? 'checked' : ''} onchange="bnSet(${i},'active',this.checked)"> Show this banner in the app</label>
+          <span class="sub" id="bnRowMsg${i}"></span>
+        </div>`).join('');
+      $('bnAdd').classList.toggle('hide', bnList.length >= BN_MAX);
+      $('bnCount').textContent = `${bnList.length} of ${BN_MAX} banners.`;
+    }
+    window.bnSet = (i, k, v) => { bnList[i][k] = v; };
+    window.bnSetLink = (i, id) => {
+      const p = products.find(x => x.id === id);
+      bnList[i].linkId = p ? p.id : '';
+      bnList[i].linkType = p ? (p.isProduct ? 'product' : 'service') : '';
+      bnList[i].linkName = p ? p.name : '';
+    };
+    window.bnRemove = i => { if (bnList.length <= BN_MIN) return; bnList.splice(i, 1); renderBanners(); };
+    window.bnClearImg = i => { bnList[i].imageUrl = ''; renderBanners(); };
+    window.bnUpload = async (i, input) => {
+      const f = input.files[0]; if (!f) return;
+      const msg = $('bnRowMsg' + i); msg.textContent = ' Uploading image…';
+      try { bnList[i].imageUrl = await uploadImage(f); renderBanners(); $('bnMsg').textContent = 'Image uploaded ✓ (press Save banners)'; }
+      catch (err) { msg.textContent = ' Upload failed: ' + err.message; }
+    };
+    $('bnAdd').onclick = () => { if (bnList.length < BN_MAX) { bnList.push(bnBlank()); renderBanners(); } };
+    $('bnSave').onclick = async () => {
+      if (bnList.length < BN_MIN) { $('bnMsg').textContent = 'Add at least 1 banner.'; return; }
+      if (bnList.length > BN_MAX) { $('bnMsg').textContent = `You can add at most ${BN_MAX} banners.`; return; }
+      const empty = bnList.findIndex(b => !b.title.trim() && !b.subtitle.trim() && !b.imageUrl);
+      if (empty >= 0) { $('bnMsg').textContent = `Banner ${empty + 1} is empty. Add a title, text or image (or remove it).`; return; }
+      try {
+        const banners = bnList.map(b => ({ title: b.title.trim(), subtitle: b.subtitle.trim(), buttonText: b.buttonText.trim(), imageUrl: b.imageUrl, active: b.active, linkId: b.linkId || '', linkType: b.linkType || '', linkName: b.linkName || '' }));
+        const first = banners.find(b => b.active) || banners[0];
+        await db.collection(COL.settings).doc('banner').set({
+          banners,
+          // first banner also saved the old way so older app versions still show it
+          title: first.title, subtitle: first.subtitle, buttonText: first.buttonText, imageUrl: first.imageUrl, active: true,
+          updatedAt: FV.serverTimestamp()
+        }, { merge: true });
+        $('bnMsg').textContent = `Saved ✓  ` + banners.map((b, i) => `Banner ${i + 1} → ${b.linkName || 'Bookings tab'}`).join('  ·  ');
+      } catch (e) { $('bnMsg').textContent = 'Failed: ' + e.message; }
+    };
+    renderBanners();
 
     // ---- Calendar Functions ----
     function changeMonth(dir) {
@@ -722,7 +977,7 @@
       renderCalendar();
     }
 
-    let activePeriod = 'upcoming', activeStatus = 'all', searchQ = '';
+    let activePeriod = 'upcoming', activeStatus = 'all', searchQ = '', userQ = '';
     const PERIODS = [['all', 'All'], ['today', 'Today'], ['week', 'This week'], ['month', 'Month'], ['upcoming', 'Upcoming'], ['past', 'Past']];
     const isoDay = d => d.toISOString().slice(0, 10);
     function to12(t) { let [h, m] = String(t).split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ' ' + ap; }
@@ -795,7 +1050,6 @@
       const payCls = pay === 'paid' ? 'bs-paid' : (pay === 'initialized' || pay === 'pending') ? 'bs-pending' : pay === 'failed' ? 'bs-failed' : '';
       const opts = ALL_STATUS.includes(st) ? ALL_STATUS : [...ALL_STATUS, st];
       const canMove = !['cancelled', 'failed', 'completed'].includes(st);
-      const face = facePhotos[b.id] || b.facePhotoUrl;
       return `<div class="bk ${esc(st)}">
         <div class="bkhead">
           <div class="bkdate"><small>${dt ? esc(dt.toLocaleDateString([], { weekday: 'short' })) : ''}</small><b>${dt ? dt.getDate() : '?'}</b><span>${dt ? esc(dt.toLocaleDateString([], { month: 'short' })) : ''}</span></div>
@@ -808,8 +1062,8 @@
           <span class="chip ${payCls}">${esc(pay === '—' ? 'No payment' : pay)}</span>
           ${bPhoto(b) ? `<img class="ph" src="${esc(bPhoto(b))}" onclick="showPhoto('${b.id}')" alt="Reference">` : ''}
         </div>
-        ${!['cancelled', 'failed', 'completed'].includes(st) ? (face
-          ? `<div class="bkface"><img class="ph" src="${esc(face)}" onclick="showImg(this.src)" alt="Client face photo"><span>Face photo received<small>Check it matches the client on arrival</small></span></div>`
+        ${!['cancelled', 'failed', 'completed'].includes(st) ? (b.facePhotoUrl
+          ? `<div class="bkface"><img class="ph" src="${esc(b.facePhotoUrl)}" onclick="showImg(this.src)" alt="Client face photo"><span>Face photo received<small>Check it matches the client on arrival</small></span></div>`
           : `<div class="bkface none"><span>Face photo not sent yet</span></div>`) : ''}
         ${b.previousDate ? `<div class="bkwas">↻ Moved from ${esc(b.previousDate)} ${esc(b.previousTime || '')}</div>` : ''}
         <div class="bkact">
@@ -841,6 +1095,7 @@
     }
     $('bkSearch').oninput = e => { searchQ = e.target.value; renderBookingsTable(); };
     $('bkStatus').onchange = e => { activeStatus = e.target.value; renderBookingsTable(); };
+    $('userSearch').oninput = e => { userQ = e.target.value; render(); };
 
     // ---- Reschedule & delete (admin) ----
     let rsBooking = null, dlBooking = null;
@@ -898,7 +1153,6 @@
           });
         }
         batch.delete(db.collection(COL.bookings).doc(b.id));
-        batch.delete(db.collection(COL.verification).doc(b.id));
         await batch.commit();
         if (b.userId) await notifyClient(b.userId, 'Booking cancelled',
           `Your ${bName(b)} booking on ${bDate(b)} ${bTime(b)} was cancelled by the salon. Reason: ${reason}` + (refund ? ' You will receive a full refund.' : '')).catch(console.error);
@@ -911,7 +1165,7 @@
     let alertsOn = false, alertCount = 0, audioCtx = null;
     try { alertsOn = localStorage.getItem('kk_alerts') === 'on'; } catch (e) {}
     const baseTitle = document.title;
-    const alertState = { bookings: null, orders: null, refunds: null, chats: null, issues: null, reviews: null, svcReviews: null };
+    const alertState = { bookings: null, orders: null, refunds: null, chats: null, issues: null, reviews: null };
 
     function paintAlertToggle() { $('alertToggle').textContent = '🔔 Alerts: ' + (alertsOn ? 'on' : 'off'); }
     function ping() {
@@ -963,16 +1217,13 @@
         orders: [COL.orders, orders, o => ({ paid: isPaid(o) }), (o, old) => (!old || !old.paid) && isPaid(o),
           o => ['New order', 'R' + (o.amountPaid ?? o.totalAmount ?? o.price ?? 0) + ' · ' + (o.userEmail || ''), 'orders']],
         refunds: [COL.refunds, refunds, r => ({ s: rStatus(r) }), (r, old) => !old && rStatus(r) === 'pending',
-          r => ['Refund request', (r.serviceName || 'Appointment') + ' · R' + (r.refundAmount ?? 0), 'refunds']],
+          r => ['Refund request', (r.serviceName || (r.orderId ? 'Order' : 'Appointment')) + ' · R' + (r.orderId ? refAmt(r) : (r.refundAmount ?? 0)), 'refunds']],
         issues: [COL.issues, issues, x => ({ u: x.unreadForAdmin || 0 }),
           (x, old) => !old ? (x.status || 'open') === 'open' : (x.unreadForAdmin || 0) > old.u,
           x => [x.subject ? 'Issue: ' + x.subject : 'Issue reported', (x.userName || 'Client') + ': ' + (x.lastMessage || ''), 'issues']],
         reviews: [COL.reviews, reviews, r => ({ s: r.rating || 0 }),
           (r, old) => !old && Number(r.rating) <= 2,
           r => ['Bad product review', (r.productName || 'A product') + ' got ' + r.rating + ' star' + (Number(r.rating) === 1 ? '' : 's'), 'reviews']],
-        svcReviews: [COL.svcReviews, svcReviews, r => ({ s: r.rating || 0 }),
-          (r, old) => !old && Number(r.rating) <= 2,
-          r => ['Bad service review', (r.serviceName || 'A service') + ' got ' + r.rating + ' star' + (Number(r.rating) === 1 ? '' : 's'), 'reviews']],
         chats: [COL.chats, chats, c => ({ w: !!c.awaitingSalon, u: c.unreadForSalon || 0, bot: c.isBotSession !== false }),
           (c, old) => (c.awaitingSalon && (!old || !old.w)) || (c.isBotSession === false && (c.unreadForSalon || 0) > (old ? old.u : 0)),
           c => [c.awaitingSalon ? 'Client wants the owner' : 'New message', (c.clientName || 'Client') + ': ' + (c.lastMessage || ''), 'messages']],
@@ -1040,13 +1291,7 @@
       const st = prodStats(), badN = st.filter(x => x.bad).length;
       const nI = issues.filter(iGroup.action).length;
       $('issueBadge').textContent = nI; $('issueBadge').classList.toggle('hide', !nI);
-      const svcBadN = svcStats().filter(x => x.bad).length, badTotal = badN + svcBadN;
-      $('reviewBadge').textContent = badTotal; $('reviewBadge').classList.toggle('hide', !badTotal);
-      $('revKinds').innerHTML = [['products', 'Products (' + reviews.length + ')'], ['services', 'Services (' + svcReviews.length + ')']]
-        .map(([k, v]) => `<button class="${k === revKind ? 'on' : ''}" onclick="setRevKind('${k}')">${v}</button>`).join('');
-      $('prodReport').classList.toggle('hide', revKind !== 'products');
-      $('svcReport').classList.toggle('hide', revKind !== 'services');
-      renderSvcReport();
+      $('reviewBadge').textContent = badN; $('reviewBadge').classList.toggle('hide', !badN);
       const all = reviews.length ? (reviews.reduce((a, r) => a + Number(r.rating || 0), 0) / reviews.length).toFixed(1) : '—';
       const shown = st.filter(x => revFilter === 'all' || (revFilter === 'bad' ? x.bad : !x.bad));
       const chips = [['all', 'All products (' + st.length + ')'], ['bad', ic('alert', 14) + 'Doing badly (' + badN + ')'], ['ok', ic('check', 14) + 'Doing fine (' + (st.length - badN) + ')']]
@@ -1069,96 +1314,12 @@
         (shown.length ? `<div class="rv-grid">${shown.map(card).join('')}</div>` : '<div class="card empty">' + (st.length ? 'Nothing in this filter.' : 'No reviews yet.') + '</div>');
     }
 
-    // ---- Service reviews (clients review services they paid for; public reply thread) ----
-    window.setRevKind = k => { revKind = k; renderProdReport(); };
-    function syncSvcReplyListeners() {
-      const ids = new Set(svcReviews.map(r => r.id));
-      svcReviews.forEach(r => {
-        if (svcReplyUnsubs[r.id]) return;
-        svcReplyUnsubs[r.id] = db.collection(COL.svcReviews).doc(r.id).collection('replies').orderBy('createdAt')
-          .onSnapshot(s => { svcReplies[r.id] = s.docs.map(d => ({ id: d.id, ...d.data() })); renderSvcReport(); },
-            e => console.error('service review replies', e));
-      });
-      Object.keys(svcReplyUnsubs).forEach(id => { if (!ids.has(id)) { svcReplyUnsubs[id](); delete svcReplyUnsubs[id]; delete svcReplies[id]; } });
-    }
-    function svcStats() {
-      const by = {};
-      svcReviews.forEach(r => { (by[r.serviceId] = by[r.serviceId] || []).push(r); });
-      return Object.entries(by).map(([sid, rs]) => {
-        const avg = rs.reduce((a, r) => a + Number(r.rating || 0), 0) / rs.length;
-        const low = rs.filter(r => Number(r.rating) <= 2).length;
-        const bad = rs.length >= BAD_MIN && (avg < BAD_AVG || low / rs.length >= 0.5);
-        return { sid, name: rs[0].serviceName || sid, rs: rs.sort((a, b) => ts(b.createdAt) - ts(a.createdAt)), avg, low, bad };
-      }).sort((a, b) => (b.bad - a.bad) || (a.avg - b.avg));
-    }
-    window.setSvcFilter = f => { svcFilter = f; renderSvcReport(); };
-    window.toggleSvc = id => { svcOpen[id] = !svcOpen[id]; renderSvcReport(); };
-    window.openSvcReply = id => { svcReplying = id; renderSvcReport(); const el = document.getElementById('svTa_' + id); if (el) el.focus(); };
-    window.cancelSvcReply = id => { svcReplying = null; delete svcDraft[id]; renderSvcReport(); };
-    window.saveSvcReply = async id => {
-      const text = (svcDraft[id] || '').trim();
-      if (!text) return alert('Write a reply first.');
-      if (text.length > 300) return alert('Replies can be at most 300 characters.');
-      try {
-        await db.collection(COL.svcReviews).doc(id).collection('replies').add({
-          userId: auth.currentUser.uid, userName: 'Kotton Kandy', text, isOwner: true, createdAt: FV.serverTimestamp()
-        });
-        svcReplying = null; delete svcDraft[id]; renderSvcReport();
-      } catch (e) { alert('Could not post reply: ' + e.message); }
-    };
-    window.delSvcReply = (rid, pid) => {
-      if (confirm('Delete this reply?')) db.collection(COL.svcReviews).doc(rid).collection('replies').doc(pid).delete().catch(e => alert(e.message));
-    };
-    window.delSvcReview = async id => {
-      if (!confirm('Delete this review and all its replies permanently?')) return;
-      try {
-        const ref = db.collection(COL.svcReviews).doc(id), reps = await ref.collection('replies').get(), b = db.batch();
-        reps.docs.forEach(d => b.delete(d.ref));
-        b.delete(ref);
-        await b.commit();
-      } catch (e) { alert('Could not delete: ' + e.message); }
-    };
-    const svcThread = r => {
-      const reps = svcReplies[r.id] || [];
-      const list = reps.map(p => `<div class="rv-reply"><div class="rh">${ic('reply', 13)}${p.isOwner ? 'Owner reply' : esc(p.userName || 'Client')}${ts(p.createdAt) ? `<em>${esc(iWhen(p.createdAt))}</em>` : ''}</div>${esc(p.text || '')}
-        <div class="rv-act"><button class="x" onclick="delSvcReply('${r.id}','${p.id}')">Delete</button></div></div>`).join('');
-      const form = svcReplying === r.id
-        ? `<div class="rv-form"><textarea id="svTa_${r.id}" maxlength="300" placeholder="Write a public reply as the salon…" oninput="svcDraft['${r.id}']=this.value">${esc(svcDraft[r.id] || '')}</textarea><div><button onclick="saveSvcReply('${r.id}')">Post reply</button><button class="cancel" onclick="cancelSvcReply('${r.id}')">Cancel</button></div></div>`
-        : `<div class="rv-act"><button onclick="openSvcReply('${r.id}')">${ic('reply', 13)}Reply</button><button class="x" onclick="delSvcReview('${r.id}')">Delete review</button></div>`;
-      return list + form;
-    };
-    function renderSvcReport() {
-      const box = $('svcReport'); if (!box) return;
-      const st = svcStats(), badN = st.filter(x => x.bad).length;
-      const all = svcReviews.length ? (svcReviews.reduce((a, r) => a + Number(r.rating || 0), 0) / svcReviews.length).toFixed(1) : '—';
-      const shown = st.filter(x => svcFilter === 'all' || (svcFilter === 'bad' ? x.bad : !x.bad));
-      const chips = [['all', 'All services (' + st.length + ')'], ['bad', ic('alert', 14) + 'Doing badly (' + badN + ')'], ['ok', ic('check', 14) + 'Doing fine (' + (st.length - badN) + ')']]
-        .map(([k, v]) => `<button class="${k === svcFilter ? 'on' : ''}" onclick="setSvcFilter('${k}')">${v}</button>`).join('');
-      const card = x => {
-        const dist = [5, 4, 3, 2, 1].map(n => { const c = x.rs.filter(r => Math.round(r.rating) === n).length; return `<div class="rv-bar">${n}${ic('star', 11, true)}<i><u style="width:${Math.round(c / x.rs.length * 100)}%"></u></i>${c}</div>`; }).join('');
-        const open = !!svcOpen[x.sid], list = open ? x.rs : x.rs.slice(0, 2);
-        return `<div class="rv-card ${x.bad ? 'bad' : 'ok'}">
-          <div class="rv-head"><div class="rv-img">${ic('star', 28)}</div>
-            <div class="rv-title"><b>${esc(x.name)}</b>${starHtml(x.avg)}</div><span class="rv-pill ${x.bad ? 'bad' : 'ok'}">${x.bad ? 'Doing badly' : 'Doing well'}</span></div>
-          <div class="rv-score"><div class="rv-big">${x.avg.toFixed(1)}<small>${x.rs.length} review${x.rs.length === 1 ? '' : 's'}</small></div><div class="rv-bars">${dist}</div></div>
-          ${x.bad ? `<div class="rv-warn"><b>Report:</b> averages ${x.avg.toFixed(1)}/5 with ${x.low} of ${x.rs.length} reviews at 1-2 stars. Read the comments and consider what to improve.</div>` : ''}
-          <div class="rv-list">${list.map(r => `<div class="rv-item">${chatAv({ clientId: r.userId, clientName: r.userName || 'Client' }, 'sm')}
-            <div class="rv-bub"><div class="top"><b>${esc(r.userName || 'Client')}</b>${starHtml(r.rating)}<em>${esc(iWhen(r.createdAt))}</em></div>${r.comment ? esc(r.comment) : '<span style="color:var(--mu)">No comment</span>'}
-            ${svcThread(r)}</div></div>`).join('')}
-            ${x.rs.length > 2 ? `<button class="rv-more" onclick="toggleSvc('${x.sid}')">${open ? 'Show less' : 'Show all ' + x.rs.length + ' reviews'}</button>` : ''}</div></div>`;
-      };
-      box.innerHTML = `<div class="rv-stats"><div class="rv-stat"><b>${svcReviews.length}</b><span>Total service reviews</span></div><div class="rv-stat"><b>${all}${ic('star', 20, true).replace('class="ico"', 'class="ico" style="color:#f5a623"')}</b><span>Average rating</span></div><div class="rv-stat"><b>${badN}</b><span>Services doing badly</span></div></div>
-        <div class="rv-chips">${chips}</div>` +
-        (shown.length ? `<div class="rv-grid">${shown.map(card).join('')}</div>` : '<div class="card empty">' + (st.length ? 'Nothing in this filter.' : 'No service reviews yet.') + '</div>');
-    }
-
     function renderIssues() {
       renderProdReport();
       const list = [...issues].sort((a, b) => ts(b.updatedAt || b.createdAt) - ts(a.updatedAt || a.createdAt));
       const tabs = { action: 'Needs reply', waiting: 'Waiting on client', done: 'Resolved / closed', all: 'All' };
       $('issueTabs').innerHTML = Object.entries(tabs).map(([k, v]) =>
         `<button class="${k === issueTab ? 'on' : ''}" onclick="setIssueTab('${k}')">${v} (${list.filter(iGroup[k]).length})</button>`).join('');
-      const n = list.filter(iGroup.action).length;
       const shown = list.filter(iGroup[issueTab]);
       $('issueList').innerHTML = shown.length ? shown.map(i => `<div class="card">
         <div class="rhead"><b>${esc(i.subject || 'Issue')}</b><span class="chip ${esc(iStatus(i))}">${esc(ILABEL[iStatus(i)] || iStatus(i))}</span></div>
@@ -1359,20 +1520,28 @@
     function render() {
       try { checkAlerts(); } catch (e) { console.error('alerts', e); }
       const sorted = [...bookings].sort((a, b) => ts(b.createdAt) - ts(a.createdAt));
-      const paid = bookings.filter(b => b.paymentStatus === 'paid' && bStatus(b) !== 'cancelled').reduce((s, b) => s + Number(bPrice(b)), 0);
-      const unread = chats.reduce((s, c) => s + (c.unreadForSalon || 0), 0);
-
 
       $('latest').innerHTML = table(['Service', 'Client', 'Date', 'Time', 'Status', 'Photo'],
         sorted.slice(0, 5).map(b => `<tr><td>${esc(bName(b))}</td><td>${esc(bWho(b))}</td><td>${esc(bDate(b))}</td><td>${esc(bTime(b))}</td><td>${esc(bStatus(b))}</td><td>${bPhoto(b) ? `<img class="ph" src="${esc(bPhoto(b))}" onclick="showPhoto('${b.id}')" alt="Reference">` : '—'}</td></tr>`));
 
       renderCalendar();
 
-      $('userTable').innerHTML = table(['Name', 'Email', 'Phone', 'Points', 'Credit', 'Bookings', 'Orders'],
-        allUsers().sort((a, b) => (uFullName(a) || '~').localeCompare(uFullName(b) || '~')).map(u => {
-          const nB = bookings.filter(b => b.userId === u.id).length, nO = orders.filter(o => o.userId === u.id).length;
-          return `<tr class="clk" onclick="openUser('${u.id}')"><td>${avatar(u, uFullName(u))}${esc(uFullName(u) || '—')}</td><td>${esc(uEmail(u) || '—')}</td><td>${esc(u.phone || u.phoneNumber || '—')}</td><td>${esc(u.points ?? u.loyaltyPoints ?? 0)}</td><td>${u.credit ? 'R' + esc(u.credit) : '—'}</td><td>${nB}</td><td>${nO}</td></tr>`;
-        }));
+      // Users shown as cards
+      const uq = userQ.trim().toLowerCase();
+      const allU = allUsers().sort((a, b) => (uFullName(a) || '~').localeCompare(uFullName(b) || '~'));
+      const ulist = uq ? allU.filter(u => [uFullName(u), uEmail(u), u.phone || u.phoneNumber || ''].join(' ').toLowerCase().includes(uq)) : allU;
+      if ($('userCount')) $('userCount').textContent = uq ? ulist.length + ' of ' + allU.length + ' users' : allU.length + ' user' + (allU.length === 1 ? '' : 's');
+      $('userTable').innerHTML = ulist.length ? ulist.map(u => {
+        const nB = bookings.filter(b => b.userId === u.id).length, nO = orders.filter(o => o.userId === u.id).length;
+        return `<div class="bk ucard" onclick="openUser('${u.id}')">
+          <div class="bkwho">${avatar(u, uFullName(u))}<div><b>${esc(uFullName(u) || 'No name')}</b><small>${esc(uEmail(u) || 'No email')}</small></div></div>
+          <div class="rmeta">${esc(u.phone || u.phoneNumber || 'No phone saved')}${u.credit ? ' · Credit R' + esc(u.credit) : ''}</div>
+          <div class="ustats">
+            <div class="ustat"><b>${esc(u.points ?? u.loyaltyPoints ?? 0)}</b><span>Points</span></div>
+            <div class="ustat"><b>${nB}</b><span>Bookings</span></div>
+            <div class="ustat"><b>${nO}</b><span>Orders</span></div>
+          </div></div>`;
+      }).join('') : '<div class="card empty" style="grid-column:1/-1">' + (uq ? 'No users match your search.' : 'No users yet.') + '</div>';
 
       renderProducts();
 
@@ -1393,6 +1562,60 @@
       if (!$('analytics').classList.contains('hide')) renderAnalytics();
     }
 
+    // ---- Sale ----
+    const salePrice = p => Math.round(Number(p.price || 0) * (100 - Number(p.salePercent || 0))) / 100;
+    const priceHtml = p => !p.saleActive ? 'R' + esc(p.price)
+      : `<s style="color:var(--mu);font-weight:400">R${esc(p.price)}</s> <span style="color:#c62828">R${salePrice(p).toFixed(2)}</span>`;
+    const salePills = p => !p.saleActive ? ''
+      : `<span class="salepill">${esc(p.salePercent)}% off</span><span class="salepill promo">${p.saleMode === 'promo' ? 'with promo' : 'always'}</span>`;
+    const promoLiveNow = () => weeklyPromos.some(promoLive);
+    window.openSale = () => {
+      const items = products.filter(p => !p.pendingDeletion);
+      if (!items.length) return alert('Add or import some products and services first.');
+      const first = items.find(p => p.saleActive);
+      $('saleMode').value = (first && first.saleMode) || 'promo';
+      $('saleErr').textContent = '';
+      $('saleList').innerHTML = items.map(p => `<div class="srow">
+        <label><input type="checkbox" class="sk" data-id="${p.id}" ${p.saleActive ? 'checked' : ''}>
+          <span><b>${esc(p.name)}</b> <small>${p.isProduct ? 'Product' : 'Service'} · R${esc(p.price)}</small></span></label>
+        <span><input type="number" class="sp" data-id="${p.id}" min="1" max="90" value="${esc(p.salePercent || 20)}"> % off</span></div>`).join('');
+      $('saleModal').classList.remove('hide');
+    };
+    $('saleBtn').onclick = openSale;
+    $('saleCancel').onclick = () => $('saleModal').classList.add('hide');
+    $('saleSave').onclick = async () => {
+      const mode = $('saleMode').value, b = db.batch();
+      let n = 0;
+      for (const p of products.filter(x => !x.pendingDeletion)) {
+        const on = document.querySelector('.sk[data-id="' + p.id + '"]').checked;
+        const pct = parseFloat(document.querySelector('.sp[data-id="' + p.id + '"]').value);
+        if (on) {
+          if (!(pct >= 1 && pct <= 90)) { $('saleErr').textContent = 'Set a % off between 1 and 90 for ' + p.name + '.'; return; }
+          b.update(db.collection(COL.products).doc(p.id), { saleActive: true, salePercent: pct, saleMode: mode });
+          n++;
+        } else if (p.saleActive) {
+          b.update(db.collection(COL.products).doc(p.id), { saleActive: false });
+        }
+      }
+      try {
+        await b.commit();
+        $('saleModal').classList.add('hide');
+        if (n && mode === 'promo' && !promoLiveNow()) alert(n + ' item' + (n === 1 ? ' is' : 's are') + ' set to go on sale with the Promo of the week. They will show the sale price once a promo is live (Marketing → Promo of the week).');
+      } catch (e) { $('saleErr').textContent = 'Could not save: ' + e.message; }
+    };
+    function renderSalePanel() {
+      const box = $('wpSale'); if (!box) return;
+      const tied = products.filter(p => p.saleActive && p.saleMode === 'promo');
+      const always = products.filter(p => p.saleActive && p.saleMode !== 'promo');
+      const live = promoLiveNow();
+      const row = p => `<div class="srow"><span><b>${esc(p.name)}</b> <small>${esc(p.salePercent)}% off · <s>R${esc(p.price)}</s> R${salePrice(p).toFixed(2)}</small></span></div>`;
+      box.innerHTML = `<b>Sale with this promo</b>
+        <p class="sub" style="margin:4px 0 10px">${live ? '🟢 A promo is live, so these items show their sale price to customers now.' : '⚪ No promo is live, so these items are at their normal price until you turn a promo on.'}</p>
+        ${tied.length ? tied.map(row).join('') : '<div class="sub">No items are set to run with the promo yet.</div>'}
+        ${always.length ? `<div class="sub" style="margin-top:10px">Also on sale all the time (not tied to a promo): ${always.map(p => esc(p.name)).join(', ')}</div>` : ''}
+        <button class="sec" style="margin-top:12px" onclick="openSale()">Choose items and % off</button>`;
+    }
+
     const DELETE_HOURS = 72;
     const isPending = p => p.pendingDeletion === true && p.deleteAt;
     const leftText = ms => {
@@ -1400,16 +1623,69 @@
       const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
       return h >= 1 ? `${h}h ${m}m left` : `${m}m left`;
     };
+    let prodTab = 'service';
+    window.setProdTab = t => {
+      prodTab = t;
+      $('pt').value = t === 'product' ? 'product' : 'service';
+      renderProducts();
+    };
     function renderProducts() {
       const now = Date.now();
-      $('prodTable').innerHTML = table(['', 'Name', 'Type', 'Category', 'Price', 'Description', ''],
-        products.map(p => {
-          const pend = isPending(p);
-          return `<tr class="${pend ? 'pend' : ''}"><td>${p.imageUrl ? `<img class="th" src="${esc(p.imageUrl)}">` : ''}</td><td>${esc(p.name)}${pend ? `<br><span class="leaving">Deleting · ${leftText(ts(p.deleteAt) - now)}</span>` : ''}</td>
-          <td>${p.isProduct ? 'Product' : 'Service'}</td><td>${esc(p.category)}</td><td>R${esc(p.price)}</td><td>${esc(p.description)}</td>
-          <td>${pend ? `<button class="sec" onclick="cancelDelete('${p.id}')">Cancel delete</button>` : `<button class="del" onclick="scheduleDelete('${p.id}')">Delete</button>`}</td></tr>`;
-        }));
+      const nSvc = products.filter(p => !p.isProduct).length, nPrd = products.filter(p => p.isProduct).length;
+      $('prodTabs').innerHTML =
+        `<button class="${prodTab === 'service' ? 'on' : ''}" onclick="setProdTab('service')">Services (${nSvc})</button>` +
+        `<button class="${prodTab === 'product' ? 'on' : ''}" onclick="setProdTab('product')">Products (${nPrd})</button>`;
+      const shown = products.filter(p => prodTab === 'product' ? p.isProduct : !p.isProduct);
+      $('prodTable').innerHTML = shown.length ? shown.map(p => {
+        const pend = isPending(p);
+        const img = p.imageUrl ? `<img class="pimg" src="${esc(p.imageUrl)}" alt="" title="Click to view full image" onclick="showImg(this.src)">` : `<div class="pph">${p.isProduct ? '🛍️' : '💅'}</div>`;
+        return `<div class="bk pcard ${p.isProduct ? 'product' : 'service'} ${pend ? 'pend' : ''}">${img}
+          <div class="pbody">
+            <div class="ptop"><b>${esc(p.name)}</b><span class="price">${priceHtml(p)}</span></div>
+            <div><span class="chip">${p.isProduct ? 'Product' : 'Service'}</span> <span class="chip">${esc(p.category)}</span>${salePills(p)}${!p.isProduct && p.duration ? ` <span class="chip">${esc(p.duration)}</span>` : ''}${pend ? ` <span class="leaving">Deleting · ${leftText(ts(p.deleteAt) - now)}</span>` : ''}</div>
+            <div class="pdesc">${esc(p.description) || '<span class="sub">No description</span>'}</div>
+            <div class="pact">${pend ? `<button class="sec" onclick="cancelDelete('${p.id}')">Cancel delete</button>` : `<button class="sec" onclick="editProd('${p.id}')">Edit</button><button class="del" onclick="scheduleDelete('${p.id}')">Delete</button>`}</div>
+          </div></div>`;
+      }).join('') : `<div class="sub">No ${prodTab === 'product' ? 'products' : 'services'} yet. Use the form above to add one.</div>`;
     }
+    let editingId = null;
+    window.editProd = id => {
+      const p = products.find(x => x.id === id); if (!p) return;
+      editingId = id;
+      $('ep_n').value = p.name || ''; $('ep_p').value = p.price ?? '';
+      const c = $('ep_c');
+      if (p.category && ![...c.options].some(o => o.value === p.category)) c.add(new Option(p.category));
+      c.value = p.category || 'Hair';
+      $('ep_t').value = p.isProduct ? 'product' : 'service';
+      $('ep_du').value = p.isProduct ? '' : (p.duration || '');
+      $('ep_d').value = p.description || ''; $('ep_f').value = ''; $('ep_msg').textContent = '';
+      const im = $('ep_img'); im.style.display = p.imageUrl ? 'block' : 'none'; im.src = p.imageUrl || '';
+      $('prodModal').classList.remove('hide');
+    };
+    $('ep_save').onclick = async () => {
+      const name = $('ep_n').value.trim(), price = parseFloat($('ep_p').value), isProduct = $('ep_t').value === 'product';
+      if (!name || isNaN(price)) return alert('Name and a valid price are required.');
+      $('ep_save').disabled = true;
+      try {
+        const f = $('ep_f').files[0];
+        const upd = { name, price, category: $('ep_c').value, isProduct, description: $('ep_d').value.trim() };
+        if (isProduct) { upd.duration = 'Product'; upd.durationMins = FV.delete(); }
+        else { const du = $('ep_du').value.trim() || '1 hr'; upd.duration = du; upd.durationMins = parseMins(du); }
+        if (f) { $('ep_msg').textContent = 'Uploading image…'; upd.imageUrl = await uploadImage(f); }
+        await db.collection(COL.products).doc(editingId).update(upd);
+        $('prodModal').classList.add('hide');
+        $('pMsg').textContent = 'Saved ✓';
+      } catch (e) { $('ep_msg').textContent = ''; alert(e.message); }
+      $('ep_save').disabled = false;
+    };
+    window.changeProdImage = async (id, inp) => {
+      const f = inp.files[0]; if (!f) return;
+      $('pMsg').textContent = 'Uploading image…';
+      try {
+        await db.collection(COL.products).doc(id).update({ imageUrl: await uploadImage(f) });
+        $('pMsg').textContent = 'Image updated ✓';
+      } catch (e) { $('pMsg').textContent = ''; alert(e.message); }
+    };
     window.scheduleDelete = async id => {
       const p = products.find(x => x.id === id);
       if (!confirm(`Delete "${p ? p.name : 'this item'}"? It stays visible to customers (marked "Leaving soon") for ${DELETE_HOURS} hours, and you can cancel during that time.`)) return;
@@ -1447,6 +1723,7 @@
       return true;
     };
     function renderWeekly() {
+      renderSalePanel();
       $('wpTable').innerHTML = table(['', 'Title', 'Description', 'Valid until', 'Status', ''],
         [...weeklyPromos].sort((a, b) => ts(b.createdAt) - ts(a.createdAt)).map(p => `<tr><td>${p.imageUrl ? `<img class="th" src="${esc(p.imageUrl)}">` : ''}</td>
           <td>${esc(p.title)}</td><td style="white-space:normal;max-width:280px">${esc(p.description || p.message)}</td>
@@ -1484,13 +1761,7 @@
       if (!f) return;
       $('wpMsg').textContent = 'Uploading image…';
       try {
-        const fd = new FormData();
-        fd.append('file', f);
-        fd.append('upload_preset', 'profile_uploads');
-        const r = await fetch('https://api.cloudinary.com/v1_1/nuqsuqyw/image/upload', { method: 'POST', body: fd });
-        const j = await r.json();
-        if (!j.secure_url) throw new Error((j.error && j.error.message) || 'Upload failed');
-        $('wpImg').value = j.secure_url;
+        $('wpImg').value = await uploadImage(f);
         $('wpMsg').textContent = 'Image uploaded ✓';
       } catch (err) { $('wpMsg').textContent = 'Upload failed: ' + err.message; }
     };
@@ -1651,8 +1922,13 @@
       if (confirm('Generate a new code? The current QR code will stop working immediately. Do this only if you think it was shared.')) loadLoyaltyQr(true);
     };
 
-    const RLABEL = { cantAttend: 'Client cannot attend (cancellation)', reschedule: 'Reschedule', ownerCancelled: 'Cancelled by the salon (full refund)' };
+    const RLABEL = { cantAttend: 'Client cannot attend (cancellation)', reschedule: 'Reschedule', ownerCancelled: 'Cancelled by the salon (full refund)', orderCancelled: 'Order cancelled by the client (before shipping)' };
     const money = n => 'R' + Number(n || 0).toFixed(2);
+    // Order refunds use the amount actually paid on the order, not what the phone sent.
+    const refAmt = r => {
+      if (r.orderId) { const o = orders.find(x => x.id === r.orderId); if (o) return Number(o.amountPaid ?? o.totalAmount ?? o.price ?? 0); }
+      return r.refundAmount;
+    };
     const rApptDate = r => r.appointmentDate?.toDate ? r.appointmentDate.toDate().toLocaleString() : (r.appointmentDateText || '');
     const rCreated = r => r.createdAt?.toDate ? r.createdAt.toDate().toLocaleString() : '';
     const rStatus = r => (r.status || 'pending').toLowerCase();
@@ -1673,12 +1949,12 @@
           ? (r.refundSent ? '<b>✅ Refund sent</b>' : `<button onclick="openPaystack('${r.id}')">Send refund on Paystack</button>`)
           : '';
       return `<div class="card">
-        <div class="rhead"><b>${esc(r.serviceName || 'Appointment')}</b><span class="chip ${esc(st)}">${esc(st)}</span></div>
-        <div class="rmeta">Client: ${esc(r.userEmail || 'Unknown')}<br>Appointment: ${esc(rApptDate(r))}<br>Requested: ${esc(rCreated(r))}<br>Reason: ${esc(RLABEL[r.reason] || r.reason || '')}</div>
+        <div class="rhead"><b>${esc(r.serviceName || (r.orderId ? 'Order' : 'Appointment'))}</b><span class="chip ${esc(st)}">${esc(st)}</span></div>
+        <div class="rmeta">Client: ${esc(r.userEmail || 'Unknown')}<br>${r.orderId ? 'Order: #' + esc(String(r.orderId).slice(0, 8)) : 'Appointment: ' + esc(rApptDate(r))}<br>Requested: ${esc(rCreated(r))}<br>Reason: ${esc(RLABEL[r.reason] || r.reason || '')}</div>
         ${r.note ? `<div class="rnote">Client note: ${esc(r.note)}</div>` : ''}
-        <div class="rsum"><div><span>Total paid</span><span>${money(r.total)}</span></div>
+        <div class="rsum"><div><span>Total paid</span><span>${money(r.orderId ? refAmt(r) : r.total)}</span></div>
           ${fee > 0 ? `<div><span>Cancellation fee</span><span>- ${money(fee)}</span></div>` : ''}
-          <div class="tot"><span>Refund amount</span><span>${money(r.refundAmount)}</span></div></div>
+          <div class="tot"><span>Refund amount</span><span>${money(refAmt(r))}</span></div></div>
         ${r.adminReason ? `<div style="margin-top:10px;font-size:14px">Your note: ${esc(r.adminReason)}</div>` : ''}
         ${actions ? `<div class="ract">${actions}</div>` : ''}
       </div>`;
@@ -1701,7 +1977,7 @@
       decision = { r, approve };
       $('reasonTitle').textContent = approve ? 'Approve refund' : 'Decline refund';
       $('reasonInfo').textContent = approve
-        ? `The client will be refunded ${money(r.refundAmount)}. You will then be taken to Paystack to send it.`
+        ? `The client will be refunded ${money(refAmt(r))}. You will then be taken to Paystack to send it.`
         : 'The client will see this reason.';
       $('reasonText').value = '';
       $('reasonText').placeholder = approve ? 'Note to client (optional)' : 'Reason for declining (required)';
@@ -1719,12 +1995,14 @@
       try {
         const b = db.batch();
         b.update(db.collection(COL.refunds).doc(r.id), { status: approve ? 'approved' : 'declined', adminReason: note, decidedAt: FV.serverTimestamp() });
-        if (approve && r.reason !== 'reschedule') {
+        if (approve && r.orderId) {
+          b.update(db.collection(COL.orders).doc(r.orderId), { status: 'Cancelled', cancelledAt: FV.serverTimestamp(), cancelReason: 'Refund approved' });
+        } else if (approve && r.reason !== 'reschedule') {
           b.update(db.collection(COL.bookings).doc(r.appointmentId), { status: 'cancelled', cancelledAt: FV.serverTimestamp(), cancelReason: 'Refund approved' });
         }
         await b.commit();
         await notifyClient(r.userId, approve ? 'Refund approved' : 'Refund declined',
-          approve ? `Your refund of ${money(r.refundAmount)} was approved. ${note}` : `Your refund request was declined. ${note}`).catch(console.error);
+          approve ? `Your refund of ${money(refAmt(r))} was approved. ${note}` : `Your refund request was declined. ${note}`).catch(console.error);
         $('reasonModal').classList.add('hide');
         if (approve) openPaystack(r.id, r);
       } catch (e) { $('reasonErr').textContent = e.message; }
@@ -1734,22 +2012,22 @@
     window.openPaystack = (id, obj) => {
       const r = obj || refunds.find(x => x.id === id); if (!r) return;
       psReq = r;
-      const bk = bookings.find(x => x.id === r.appointmentId);
+      const bk = r.orderId ? orders.find(x => x.id === r.orderId) : bookings.find(x => x.id === r.appointmentId);
       psRef = (bk && bk.paymentReference) || r.paymentReference || '';
       $('psInfo').textContent = `${r.serviceName || ''} · ${r.userEmail || ''}`;
-      $('psAmount').textContent = money(r.refundAmount);
+      $('psAmount').textContent = money(refAmt(r));
       $('psRef').textContent = psRef || "Not found on this booking. Search the client's email in Paystack.";
       $('psModal').classList.remove('hide');
     };
-    $('psCopyAmt').onclick = e => copyText((Number(psReq.refundAmount) || 0).toFixed(2), e.target);
+    $('psCopyAmt').onclick = e => copyText((Number(refAmt(psReq)) || 0).toFixed(2), e.target);
     $('psCopyRef').onclick = e => psRef && copyText(psRef, e.target);
     $('psOpen').onclick = () => window.open('https://dashboard.paystack.com/#/transactions', '_blank');
     $('psLater').onclick = () => $('psModal').classList.add('hide');
     $('psSent').onclick = async () => {
-      if (!confirm('Confirm that you have sent the ' + money(psReq.refundAmount) + ' refund on Paystack? The client will be told it was sent.')) return;
+      if (!confirm('Confirm that you have sent the ' + money(refAmt(psReq)) + ' refund on Paystack? The client will be told it was sent.')) return;
       try {
         await db.collection(COL.refunds).doc(psReq.id).update({ refundSent: true, refundSentAt: FV.serverTimestamp() });
-        await notifyClient(psReq.userId, 'Refund sent', `Your refund of ${money(psReq.refundAmount)} has been sent.`).catch(console.error);
+        await notifyClient(psReq.userId, 'Refund sent', `Your refund of ${money(refAmt(psReq))} has been sent.`).catch(console.error);
         $('psModal').classList.add('hide');
       } catch (e) { alert(e.message); }
     };
@@ -1924,8 +2202,10 @@
         showNearest(parseFloat(j[0].lat), parseFloat(j[0].lon), q);
       } catch (e) { $('lkStatus').textContent = 'Could not look up that address: ' + e.message; }
     };
-    $('lkAddr').onkeydown = e => { if (e.key === 'Enter') $('lkSearch').click(); };$('lkGps').onclick = () => {
-      if (!navigator.geolocation) { $('lkStatus').textContent = 'Your browser cannot share its location.'; return; }$('lkStatus').textContent = 'Getting your location...';
+    $('lkAddr').onkeydown = e => { if (e.key === 'Enter') $('lkSearch').click(); };
+    $('lkGps').onclick = () => {
+      if (!navigator.geolocation) { $('lkStatus').textContent = 'Your browser cannot share its location.'; return; }
+      $('lkStatus').textContent = 'Getting your location...';
       navigator.geolocation.getCurrentPosition(
         p => { $('lkAddr').value = 'My current location'; showNearest(p.coords.latitude, p.coords.longitude, 'My current location'); },
         () => { $('lkStatus').textContent = 'Location was blocked. Type your address instead.'; });
@@ -1936,7 +2216,7 @@
     };
 
     const GSCOPE = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly';
-    let gToken = null, gExpiry = 0, prStop = false, prBusy = false;
+    let gToken = null, gExpiry = 0, prStop = false, prBusy = false, prImg = '', prUp = false;
     const gClient = () => { try { return localStorage.getItem('kk_gclient') || ''; } catch (e) { return ''; } };
     const promoRecipients = () => users
       .filter(u => u.prefs && u.prefs.promotions === true && u.prefs.email !== false && uEmail(u))
@@ -1946,11 +2226,21 @@
       if (!$('prStats')) return;
       const n = promoRecipients().length, optedOut = users.length - n;
       $('prStats').innerHTML = `<span><b>${n}</b> client${n === 1 ? '' : 's'} will receive it</span><span>${optedOut} not opted in</span>`;
-      if (!$('prClient').value)$('prClient').value = gClient();
+      if (!$('prClient').value) $('prClient').value = gClient();
     }
     $('prSaveClient').onclick = () => {
-      try { localStorage.setItem('kk_gclient', $('prClient').value.trim()); } catch (e) {}$('prMsg').textContent = 'Saved.';
+      try { localStorage.setItem('kk_gclient', $('prClient').value.trim()); } catch (e) {}
+      $('prMsg').textContent = 'Saved.';
     };
+    const prShowImg = () => { $('prPrev').src = prImg; $('prPrev').classList.toggle('hide', !prImg); $('prImgClear').classList.toggle('hide', !prImg); };
+    $('prFile').onchange = async e => {
+      const f = e.target.files[0]; if (!f) return;
+      prUp = true; prSay('Uploading image…');
+      try { prImg = await uploadImage(f); prShowImg(); prSay('Image uploaded ✓ It will be sent with the email.'); }
+      catch (err) { prImg = ''; prShowImg(); prSay('Image upload failed: ' + err.message, true); }
+      prUp = false;
+    };
+    $('prImgClear').onclick = () => { prImg = ''; $('prFile').value = ''; prShowImg(); prSay('Image removed.'); };
     const prSay = (m, bad) => { $('prMsg').textContent = m; $('prMsg').style.color = bad ? '#d32f2f' : 'var(--tx)'; };
 
     function getGmailToken() {
@@ -1975,9 +2265,9 @@
       return b64url(['To: ' + to, 'Subject: =?UTF-8?B?' + b64(subject) + '?=', 'MIME-Version: 1.0',
         'Content-Type: text/html; charset="UTF-8"', 'Content-Transfer-Encoding: base64', '', body].join('\r\n'));
     }
-    const emailHtml = (name, text) => `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#222;line-height:1.6">
+    const emailHtml = (name, text, img) => `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#222;line-height:1.6">
       <h2 style="color:#6B3A82;margin-bottom:4px">Kotton Kandy</h2>
-      <p>Hi ${esc(name || 'there')},</p><p>${esc(text).replace(/\n/g, '<br>')}</p>
+      <p>Hi ${esc(name || 'there')},</p><p>${esc(text).replace(/\n/g, '<br>')}</p>${img ? `<p><img src="${esc(img)}" alt="" style="max-width:100%;height:auto;border-radius:12px;display:block"></p>` : ''}
       <hr style="border:none;border-top:1px solid #eee;margin:24px 0 10px">
       <p style="font-size:12px;color:#888">You are receiving this because you turned on Promotional Alerts in the Kotton Kandy app. To stop receiving these emails, open Settings in the app and switch off Promotional Alerts.</p></div>`;
     async function gmailSend(to, subject, html) {
@@ -1993,9 +2283,10 @@
       }
     }
     function promoInputs() {
-      const subject = $('prSubject').value.trim(), text =$('prBody').value.trim();
+      const subject = $('prSubject').value.trim(), text = $('prBody').value.trim();
       if (!subject || !text) { prSay('Please write a subject and a message.', true); return null; }
-      return { subject, text };
+      if (prUp) { prSay('Please wait for the image to finish uploading.', true); return null; }
+      return { subject, text, img: prImg };
     }
     $('prTest').onclick = async () => {
       const p = promoInputs(); if (!p) return;
@@ -2003,7 +2294,7 @@
         const token = await getGmailToken();
         const me = await (await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', { headers: { Authorization: 'Bearer ' + token } })).json();
         if (!me.emailAddress) throw new Error('Could not read your Gmail address.');
-        await gmailSend(me.emailAddress, '[TEST] ' + p.subject, emailHtml('there', p.text));
+        await gmailSend(me.emailAddress, '[TEST] ' + p.subject, emailHtml('there', p.text, p.img));
         prSay('Test sent to ' + me.emailAddress + '. Check your inbox.');
       } catch (e) { prSay(e.message, true); }
     };
@@ -2012,18 +2303,19 @@
       if (!list) return prSay('No opted-in clients yet.', true);
       copyText(list, e.target);
     };
-    $('prStop').onclick = () => { prStop = true; };$('prSend').onclick = async () => {
+    $('prStop').onclick = () => { prStop = true; };
+    $('prSend').onclick = async () => {
       if (prBusy) return;
       const p = promoInputs(); if (!p) return;
       const rs = promoRecipients();
       if (!rs.length) return prSay('No clients have opted in to promotions yet, so there is nobody to send to.', true);
       if (rs.length > 450) return prSay('That is more than Gmail allows in a day (about 500). Send in smaller batches.', true);
       if (!confirm('Send this email to ' + rs.length + ' client' + (rs.length === 1 ? '' : 's') + '? This cannot be undone.')) return;
-      prBusy = true; prStop = false; $('prSend').disabled = true; $('prStop').classList.remove('hide');$('prBarWrap').classList.remove('hide');
+      prBusy = true; prStop = false; $('prSend').disabled = true; $('prStop').classList.remove('hide'); $('prBarWrap').classList.remove('hide');
       let ok = 0, fail = 0, lastErr = '';
       try { await getGmailToken(); } catch (e) { prSay(e.message, true); prBusy = false; $('prSend').disabled = false; $('prStop').classList.add('hide'); return; }
       for (let i = 0; i < rs.length && !prStop; i++) {
-        try { await gmailSend(rs[i].email, p.subject, emailHtml(rs[i].name, p.text)); ok++; }
+        try { await gmailSend(rs[i].email, p.subject, emailHtml(rs[i].name, p.text, p.img)); ok++; }
         catch (e) { fail++; lastErr = e.message; if (/quota|limit|rate/i.test(e.message)) break; }
         $('prBar').style.width = Math.round((i + 1) / rs.length * 100) + '%';
         prSay(`Sending... ${ok} sent, ${fail} failed`);
@@ -2033,7 +2325,7 @@
         try {
           for (let i = 0; i < rs.length; i += 400) {
             const b = db.batch();
-            rs.slice(i, i + 400).forEach(r => b.set(db.collection(COL.notifications).doc(), { userId: r.id, type: 'promotion', title: p.subject, message: p.text, body: p.text, read: false, createdAt: FV.serverTimestamp() }));
+            rs.slice(i, i + 400).forEach(r => b.set(db.collection(COL.notifications).doc(), { userId: r.id, type: 'promotion', title: p.subject, message: p.text, body: p.text, ...(p.img ? { imageUrl: p.img } : {}), read: false, createdAt: FV.serverTimestamp() }));
             await b.commit();
           }
         } catch (e) { lastErr = 'In-app notifications failed: ' + e.message; }
@@ -2059,7 +2351,7 @@
         $('msgs').innerHTML = msgs.length ? msgs.map(m => `<div class="mrow ${m.senderType === 'salon' ? 'me' : ''}">
           ${m.senderType === 'bot' ? '<div class="who">' + ic('bot', 13) + 'Chatbot</div>' : ''}${(() => { const bub = `<div class="m ${m.senderType === 'bot' ? 'bot' : ''}">${m.imageUrl ? `<img src="${esc(m.imageUrl)}" style="max-width:100%;border-radius:12px;display:block;margin-bottom:4px">` : ''}${esc(m.text)}</div>`; const c = chats.find(x => x.id === activeChat); return m.senderType === 'client' && c ? `<div class="mline">${chatAv(c, 'sm')}${bub}</div>` : bub; })()}
           ${ts(m.timestamp) ? `<div class="mt">${esc(chatTime(m.timestamp))}</div>` : ''}</div>`).join('') : '<div class="mempty">' + ic('chat', 44) + 'No messages yet</div>';
-        $('msgs').scrollTop =$('msgs').scrollHeight;
+        $('msgs').scrollTop = $('msgs').scrollHeight;
         markRead(id, msgs);
       }, e => alert('Could not load messages: ' + e.message));
     };
@@ -2104,16 +2396,29 @@
     };
     window.delDoc = (col, id) => { if (confirm('Delete this item permanently?')) db.collection(col).doc(id).delete().catch(e => alert(e.message)); };
 
+    // "1 hr 30 mins", "45 mins", "2 hours" -> minutes (defaults to 60)
+    function parseMins(s) {
+      const h = /(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)/i.exec(s), m = /(\d+)\s*(?:m|min|mins|minute|minutes)/i.exec(s);
+      const t = (h ? Math.round(parseFloat(h[1]) * 60) : 0) + (m ? parseInt(m[1], 10) : 0);
+      return t > 0 ? t : (parseInt(s, 10) || 60);
+    }
     $('addProd').onclick = async () => {
-      const name = $('pn').value.trim(), price = parseFloat($('pp').value), isProduct =$('pt').value === 'product';
+      const name = $('pn').value.trim(), price = parseFloat($('pp').value), isProduct = $('pt').value === 'product';
       if (!name || isNaN(price)) return alert('Name and a valid price are required.');
+      $('addProd').disabled = true;
       try {
+        const f = $('pf').files[0];
+        if (f) $('pMsg').textContent = 'Uploading image…';
+        const imageUrl = f ? await uploadImage(f) : '';
         await db.collection(COL.products).add({
-          name, price, category: $('pc').value, isProduct, imageUrl:$('pi').value.trim(),
-          description: $('pd').value.trim(), duration: isProduct ? 'Product' : ($('pdu').value.trim() || '1 hr'), createdAt: FV.serverTimestamp()
+          name, price, category: $('pc').value, isProduct, imageUrl,
+          description: $('pd').value.trim(), duration: isProduct ? 'Product' : ($('pdu').value.trim() || '1 hr'),
+          ...(isProduct ? {} : { durationMins: parseMins($('pdu').value.trim() || '1 hr') }), createdAt: FV.serverTimestamp()
         });
-        ['pn', 'pp', 'pi', 'pd', 'pdu'].forEach(i => $(i).value = '');
-      } catch (e) { alert(e.message); }
+        ['pn', 'pp', 'pf', 'pd', 'pdu'].forEach(i => $(i).value = '');
+        $('pMsg').textContent = 'Added ✓';
+      } catch (e) { $('pMsg').textContent = ''; alert(e.message); }
+      $('addProd').disabled = false;
     };
 
     const SEED = [
@@ -2121,6 +2426,22 @@
       ['gel_nails', 'Gel Nails', 'Nails', 250, 'Beautiful long-lasting gel nail application.', '1 hr 30 min'],
       ['makeup', 'Professional Makeup', 'Makeup', 450, 'Professional makeup for events and special occasions.', '1 hr 30 min'],
       ['lashes', 'Lash Extensions', 'Lashes', 300, 'Enhance your look with beautiful lash extensions.', '1 hr'],
+      ['press_on_plain', 'Press-on Plain', 'Press-ons', 250, 'Clean, simple, solid-color press-on set application.', '45 mins'],
+      ['press_on_glam', 'Press-on Glam', 'Press-ons', 350, 'Glamorous press-on set with intricate design elements.', '1 hour'],
+      ['press_on_installation', 'Press-on Installation', 'Press-ons', 100, 'Professional sizing, prep, and long-lasting application.', '30 mins'],
+      ['cluster_lashes', 'Cluster Lashes', 'Lashes', 200, 'Full, beautiful cluster lash application.', '45 mins'],
+      ['classic_lashes', 'Classic Lashes', 'Lashes', 250, 'Natural-looking individual lash extensions.', '1 hour 30 mins'],
+      ['volume_lashes', 'Volume Lashes', 'Lashes', 300, 'Full and fluffy volume lash extensions.', '2 hours'],
+      ['hybrid_lashes', 'Hybrid Lashes', 'Lashes', 350, 'Combination of classic and volume techniques.', '1 hour 45 mins'],
+      ['eyelash_removal', 'Eyelash Removal', 'Lashes', 50, 'Safe and gentle removal of existing lash extensions.', '30 mins'],
+      ['wig_lines', 'Wig Lines', 'Hair', 150, 'Flat, secure cornrow base for comfortable wig wear.', '45 mins'],
+      ['keratin_wig_care', 'Keratin Wig Care', 'Hair', 250, 'Restorative keratin wash, deep condition, and revival.', '1 hour'],
+      ['eye_brow_care', 'Eye Brow Care', 'Makeup', 200, 'Precision eyebrow shaping, trimming, and grooming.', '30 mins'],
+      ['afro_crotchet', 'Afro Crotchet', 'Hair', 350, 'Neat and lightweight Afro crotchet installation.', '2 hours'],
+      ['box_braids', 'Knotless / Box Braids', 'Hair', 600, 'Full head protective braiding.', '4 hours'],
+      ['wig_installation', 'Wig Installation', 'Hair', 400, 'Professional wig fitting, melting, and styling.', '1 hour 30 mins'],
+      ['soft_glam', 'Soft Glam', 'Makeup', 400, 'Seamless, radiant neutral glam makeup.', '1 hour'],
+      ['full_glam', 'Full Glam', 'Makeup', 500, 'Full coverage, dramatic eye look, cut crease, and lashes.', '1 hour 30 mins'],
       ['facial', 'Luxury Facial', 'Skincare', 400, 'Relaxing facial treatment for healthy glowing skin.', '1 hr'],
       ['hair_wash', 'Hair Wash & Treatment', 'Hair', 220, 'Deep cleansing and nourishing hair treatment.', '1 hr'],
       ['aki_shampoo', 'Aki Asili Clarifying Shampoo', 'Hair', 150, 'Deep cleansing shampoo formulated to eliminate build-up.', 'Product', 'assets/images/shampoo.jpeg'],
@@ -2131,12 +2452,18 @@
       ['matte_nude_nails', 'Matte Nude Press-On Nails', 'Nails', 130, 'Sophisticated matte nude finish for everyday wear.', 'Product', 'assets/images/matte_nails.jpeg']
     ];
     $('seedBtn').onclick = async () => {
-      if (!confirm('Copy the ' + SEED.length + ' items currently built into the app into Firestore?')) return;
+      const have = new Set(products.map(p => p.id));
+      const todo = SEED.filter(s => !have.has(s[0]));
+      if (!todo.length) return alert('Everything built into the app is already here.');
+      if (!confirm('Copy ' + todo.length + ' items built into the app (products, and the services shown on the booking page) so you can edit them here? Items you already have are left untouched.')) return;
       try {
         const b = db.batch();
-        SEED.forEach(([id, name, category, price, description, duration, image]) =>
-          b.set(db.collection(COL.products).doc(id), { name, category, price, description, duration, isProduct: duration === 'Product', image: image || '', imageUrl: '', createdAt: FV.serverTimestamp() }, { merge: true }));
+        todo.forEach(([id, name, category, price, description, duration, image]) => {
+          const isProduct = duration === 'Product';
+          b.set(db.collection(COL.products).doc(id), { name, category, price, description, duration, isProduct, ...(isProduct ? {} : { durationMins: parseMins(duration) }), image: image || '', imageUrl: '', createdAt: FV.serverTimestamp() });
+        });
         await b.commit();
+        $('pMsg').textContent = 'Imported ✓';
       } catch (e) { alert(e.message); }
     };
 </script>

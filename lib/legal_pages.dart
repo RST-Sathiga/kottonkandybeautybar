@@ -64,6 +64,7 @@ class TermsOfServicePage extends StatelessWidget {
                 "Rescheduling: an additional fee of R100.00 is payable each time you reschedule a booking. The fee is paid when you reschedule and is non-refundable. Your original payment stays on the appointment.\n"
                 "Cancelling: if you cancel a booking, you forfeit 50% of the total amount you paid for it. The remaining 50% is refunded to your original payment method within 3-5 business days.\n"
                 "Salon cancellations: if the salon cancels your appointment, you receive a full refund.\n"
+                "Product orders: you can cancel a paid order from the Orders page until it has shipped, and you will receive a full refund of the amount you paid once the salon approves it. Orders that have shipped cannot be cancelled.\n"
                 "We ask for at least 24 hours' notice. Repeated last-minute cancellations or no-shows may lead to temporary suspension of online booking privileges or require advance deposit requirements for future slots.\n"
                 "You are shown these rules, and must agree to them, before you pay for a booking.\n\n"
                 "3. Service Satisfaction\n"
