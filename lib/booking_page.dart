@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -43,6 +44,82 @@ class _BookingPageState extends State<BookingPage> {
   static const double _rescheduleFee = 100.0;
 
   bool get _isReschedule => widget.rescheduleAppointment != null;
+
+  // ---- Favourite services (same users/{uid}/favorites collection as the shop) ----
+  final Set<String> _favourites = {};
+
+  Future<void> _loadFavourites() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    try {
+      final snap = await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('favorites')
+          .get();
+      if (mounted) {
+        setState(() {
+          _favourites
+            ..clear()
+            ..addAll(snap.docs.map((d) => d.id));
+        });
+      }
+    } catch (e) {
+      debugPrint('Could not load favourites: $e');
+    }
+  }
+
+  Future<void> _toggleFavourite(Map<String, dynamic> service) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      _showMessage('Please log in to save favourites.');
+      return;
+    }
+    final String id = service['id'].toString();
+    final favRef = _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('favorites')
+        .doc(id);
+
+    final bool adding = !_favourites.contains(id);
+    setState(() {
+      if (adding) {
+        _favourites.add(id);
+      } else {
+        _favourites.remove(id);
+      }
+    });
+
+    try {
+      if (adding) {
+        final String? img = _serviceImage(service);
+        await favRef.set({
+          'name': service['name'],
+          'price': service['price'],
+          'description': service['description'] ?? '',
+          'category': service['category'] ?? '',
+          if (img != null) 'image': img,
+          'addedAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        await favRef.delete();
+      }
+    } catch (e) {
+      debugPrint('Could not update favourite: $e');
+      // Undo the heart if saving failed.
+      if (mounted) {
+        setState(() {
+          if (adding) {
+            _favourites.remove(id);
+          } else {
+            _favourites.add(id);
+          }
+        });
+        _showMessage('Could not update your favourites. Please try again.');
+      }
+    }
+  }
 
   String _selectedCategory = 'Press-ons';
   Map<String, dynamic>? _selectedService;
@@ -173,9 +250,297 @@ class _BookingPageState extends State<BookingPage> {
     },
   ];
 
+  // ---- Services added by the admin (products collection, isProduct == false) ----
+  List<Map<String, dynamic>> _remoteServices = [];
+  bool _hasCatalog = false; // the admin has added items, so the built-in list is not used
+  bool _catalogLoaded = false;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _servicesSub;
+
+  static int _parseMins(String s) {
+    final h = RegExp(r'(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)', caseSensitive: false).firstMatch(s);
+    final m = RegExp(r'(\d+)\s*(?:m|min|mins|minute|minutes)', caseSensitive: false).firstMatch(s);
+    final t = (h != null ? (double.parse(h.group(1)!) * 60).round() : 0) +
+        (m != null ? int.parse(m.group(1)!) : 0);
+    return t > 0 ? t : (int.tryParse(s.trim()) ?? 60);
+  }
+
+  void _listenToServices() {
+    _servicesSub = _firestore.collection('products').snapshots().listen((snap) {
+      final list = <Map<String, dynamic>>[];
+      int catalog = 0;
+      // Is a promo of the week live? Sales set to run "with the promo" depend on it.
+      final DateTime nowT = DateTime.now();
+      final bool promoLive = snap.docs.any((d) {
+        final m = d.data();
+        if (m['kind'] != 'promo' || m['active'] != true) return false;
+        final s = (m['startsAt'] as Timestamp?)?.toDate();
+        final e = (m['endsAt'] as Timestamp?)?.toDate();
+        if (s != null && s.isAfter(nowT)) return false;
+        if (e != null && e.isBefore(nowT)) return false;
+        return true;
+      });
+      for (final d in snap.docs) {
+        final data = d.data();
+        if (data['kind'] == 'promo') continue;
+        catalog++;
+        if (data['isProduct'] == true) continue;
+        // Being deleted: stays visible (with a "Leaving soon" tag) until the timer runs out.
+        final DateTime? deleteAt = data['pendingDeletion'] == true
+            ? (data['deleteAt'] as Timestamp?)?.toDate()
+            : null;
+        if (deleteAt != null && !deleteAt.isAfter(DateTime.now())) continue;
+        final name = (data['name'] ?? '').toString().trim();
+        if (name.isEmpty) continue;
+        final dur = (data['duration'] ?? '1 hr').toString();
+        final double basePrice = ((data['price'] as num?) ?? 0).toDouble();
+        final double salePct = ((data['salePercent'] as num?) ?? 0).toDouble();
+        final bool saleOn = data['saleActive'] == true &&
+            salePct > 0 &&
+            salePct < 100 &&
+            (data['saleMode'] != 'promo' || promoLive);
+        list.add({
+          'id': d.id,
+          'name': name,
+          'category': (data['category'] ?? 'Hair').toString(),
+          'description': (data['description'] ?? '').toString(),
+          'price': saleOn ? (basePrice * (100 - salePct)).round() / 100 : basePrice,
+          if (saleOn) 'originalPrice': basePrice,
+          if (saleOn) 'salePercent': salePct,
+          'durationMins': (data['durationMins'] as num?)?.toInt() ?? _parseMins(dur),
+          'duration': dur,
+          'imageUrl': (data['imageUrl'] ?? '').toString(),
+          'image': (data['image'] ?? '').toString(),
+          'icon': Icons.auto_awesome,
+          if (deleteAt != null) 'deleteAt': deleteAt,
+        });
+      }
+      if (mounted) {
+        setState(() {
+          _remoteServices = list;
+          _hasCatalog = catalog > 0;
+          _catalogLoaded = true;
+        });
+      }
+    }, onError: (_) {
+      if (mounted) setState(() => _catalogLoaded = true);
+    });
+  }
+
+  /// Built-in services plus the ones the admin added (admin copies win on a name clash).
+  List<Map<String, dynamic>> get _allServices {
+    if (!_catalogLoaded) return [];
+    final now = DateTime.now();
+    final remote = _remoteServices.where((s) {
+      final d = s['deleteAt'] as DateTime?;
+      return d == null || d.isAfter(now); // timer ran out: gone, even before the admin page cleans up
+    }).toList();
+    // Once the admin manages the list, the built-in copies are never mixed in
+    // (otherwise a deleted service would keep showing from the built-in list).
+    if (_hasCatalog) return remote;
+    final names = remote.map((s) => s['name'].toString().toLowerCase()).toSet();
+    return [
+      ..._salonServices.where((s) => !names.contains(s['name'].toString().toLowerCase())),
+      ...remote,
+    ];
+  }
+
+  List<String> get _allCategories {
+    final cats = [..._categories];
+    for (final s in _remoteServices) {
+      final c = s['category'].toString();
+      if (!cats.contains(c)) cats.add(c);
+    }
+    return cats;
+  }
+
+  // ---- Admin-controlled availability (settings/availability) ----
+  List<int> _openWeekdays = [0, 1, 2, 3, 4, 5, 6]; // 0 = Sunday
+  Set<String> _blockedDates = {};
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _availSub;
+
+  void _listenToAvailability() {
+    _availSub = _firestore
+        .collection('settings')
+        .doc('availability')
+        .snapshots()
+        .listen((snap) {
+      final d = snap.data();
+      if (d == null) return;
+      final days = (d['openWeekdays'] as List?)
+          ?.map((e) => (e as num).toInt())
+          .toList();
+      final blocked = (d['blockedDates'] as List?)
+          ?.map((e) => e.toString())
+          .toSet();
+      if (!mounted) return;
+      setState(() {
+        if (days != null) _openWeekdays = days;
+        _blockedDates = blocked ?? <String>{};
+        // Drop a previously chosen date that has just become unavailable.
+        if (_selectedDate != null && !_isDateAvailable(_selectedDate!)) {
+          _selectedDate = null;
+          _selectedTimeSlot = null;
+        }
+      });
+    }, onError: (_) {});
+  }
+
+  bool _isDateAvailable(DateTime date) {
+    if (!_openWeekdays.contains(date.weekday % 7)) return false;
+    final key =
+        '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    return !_blockedDates.contains(key);
+  }
+
+  DateTime _firstAvailableDate() {
+    var d = DateTime.now();
+    for (int i = 0; i < 61; i++) {
+      if (_isDateAvailable(d)) return d;
+      d = d.add(const Duration(days: 1));
+    }
+    return DateTime.now();
+  }
+
+  /// The picture of a service (admin photo or bundled asset), or null if it has none.
+  String? _serviceImage(Map<String, dynamic> service) {
+    final url = (service['imageUrl'] ?? '').toString();
+    if (url.isNotEmpty) return url;
+    final asset = (service['image'] ?? '').toString();
+    return asset.isNotEmpty ? asset : null;
+  }
+
+  /// Price at the bottom right of a service card (old price crossed out when on sale).
+  Widget _priceBox(Map<String, dynamic> service) {
+    final double price = (service['price'] as num).toDouble();
+    final num? original = service['originalPrice'] as num?;
+    if (original == null) {
+      return Text(
+        'R${price.toStringAsFixed(2)}',
+        style: const TextStyle(color: primaryPurple, fontWeight: FontWeight.bold, fontSize: 16),
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          'R${original.toStringAsFixed(2)}',
+          style: TextStyle(
+            color: Colors.grey[600],
+            fontSize: 12,
+            decoration: TextDecoration.lineThrough,
+          ),
+        ),
+        Text(
+          'R${price.toStringAsFixed(2)}',
+          style: const TextStyle(color: Color(0xFFD32F2F), fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+      ],
+    );
+  }
+
+  /// Turns any error into something a customer can understand. Technical details
+  /// (Firebase, permissions, network) are only written to the debug log.
+  String _friendlyError(Object e) {
+    final String text = e.toString().replaceFirst('Exception: ', '');
+    final String lower = text.toLowerCase();
+    final bool technical = text.startsWith('[') ||
+        lower.contains('firebase') ||
+        lower.contains('firestore') ||
+        lower.contains('permission') ||
+        lower.contains('socketexception') ||
+        lower.contains('exception') ||
+        lower.contains('null');
+    if (technical) {
+      debugPrint('Booking error: $e');
+      return 'Something went wrong. Please try again.';
+    }
+    return text;
+  }
+
+  Widget _serviceIconBox(Map<String, dynamic> service) {
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        color: lightPurple,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Icon(
+        (service['icon'] as IconData?) ?? Icons.auto_awesome,
+        color: primaryPurple,
+        size: 30,
+      ),
+    );
+  }
+
+  /// Square picture for a service. Tap it to see the whole picture full screen.
+  Widget _serviceThumb(Map<String, dynamic> service) {
+    final String? img = _serviceImage(service);
+    if (img == null) return _serviceIconBox(service);
+    final ImageProvider provider =
+    img.startsWith('http') ? NetworkImage(img) : AssetImage(img);
+    return GestureDetector(
+      onTap: () => showFullImage(context, img, title: service['name'].toString()),
+      child: SizedBox(
+        width: 72,
+        height: 72,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image(
+                  image: provider,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _serviceIconBox(service),
+                  loadingBuilder: (context, child, progress) => progress == null
+                      ? child
+                      : Container(
+                    color: lightPurple,
+                    child: const Center(
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: primaryPurple),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 4,
+              bottom: 4,
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.zoom_out_map, size: 12, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _availSub?.cancel();
+    _servicesSub?.cancel();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
+    _listenToAvailability();
+    _listenToServices();
+    _loadFavourites();
     if (widget.preselectedService != null) {
       _selectedService = widget.preselectedService;
       _selectedCategory = widget.preselectedService!['category'] ?? 'Press-ons';
@@ -322,7 +687,8 @@ class _BookingPageState extends State<BookingPage> {
         });
       }
     } catch (e) {
-      _showMessage('Failed to load time slots: $e');
+      debugPrint('Failed to load time slots: $e');
+      _showMessage('Could not load the available times. Please try again.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -406,6 +772,15 @@ class _BookingPageState extends State<BookingPage> {
 
     if (_selectedTimeSlot == null) {
       _showMessage('Please select a time slot.');
+      return;
+    }
+
+    if (!_isDateAvailable(_selectedDate!)) {
+      _showMessage('Sorry, that date is no longer available. Please pick another.');
+      setState(() {
+        _selectedDate = null;
+        _selectedTimeSlot = null;
+      });
       return;
     }
 
@@ -515,7 +890,7 @@ class _BookingPageState extends State<BookingPage> {
       if (bookingId != null) {
         await _firestore.collection('appointments').doc(bookingId).update({'status': 'failed'});
       }
-      _showMessage(e.toString().replaceFirst('Exception: ', ''));
+      _showMessage(_friendlyError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -528,6 +903,14 @@ class _BookingPageState extends State<BookingPage> {
     }
     if (_selectedTimeSlot == null) {
       _showMessage('Please select a new time slot.');
+      return;
+    }
+    if (!_isDateAvailable(_selectedDate!)) {
+      _showMessage('Sorry, that date is no longer available. Please pick another.');
+      setState(() {
+        _selectedDate = null;
+        _selectedTimeSlot = null;
+      });
       return;
     }
 
@@ -602,7 +985,7 @@ class _BookingPageState extends State<BookingPage> {
         ),
       );
     } catch (e) {
-      _showMessage(e.toString().replaceFirst('Exception: ', ''));
+      _showMessage(_friendlyError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -759,7 +1142,7 @@ class _BookingPageState extends State<BookingPage> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredServices = _salonServices
+    final filteredServices = _allServices
         .where((service) => service['category'] == _selectedCategory)
         .toList();
 
@@ -788,9 +1171,9 @@ class _BookingPageState extends State<BookingPage> {
                 height: 45,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
-                  itemCount: _categories.length,
+                  itemCount: _allCategories.length,
                   itemBuilder: (context, index) {
-                    final category = _categories[index];
+                    final category = _allCategories[index];
                     final isSelected = category == _selectedCategory;
                     return Padding(
                       padding: const EdgeInsets.only(right: 10),
@@ -821,6 +1204,11 @@ class _BookingPageState extends State<BookingPage> {
 
               const Text('2. Select Service', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
+              if (!_catalogLoaded)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator(color: primaryPurple)),
+                ),
               ...filteredServices.map((service) {
                 final isSelected = _selectedService?['id'] == service['id'];
                 return Container(
@@ -830,36 +1218,95 @@ class _BookingPageState extends State<BookingPage> {
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: isSelected ? primaryPurple : Colors.transparent, width: 2),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Stack(
                     children: [
-                      ListTile(
-                        onTap: () {
-                          setState(() {
-                            _selectedService = service;
-                            _selectedTimeSlot = null;
-                          });
-                          if (_selectedDate != null) {
-                            _generateAvailableTimeSlots();
-                          }
-                        },
-                        leading: CircleAvatar(
-                          backgroundColor: lightPurple,
-                          child: Icon(service['icon'] as IconData, color: primaryPurple),
-                        ),
-                        title: Text(service['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('${service['description']}\nDuration: ${service['duration']}'),
-                        isThreeLine: true,
-                        trailing: Text(
-                          'R${(service['price'] as num).toStringAsFixed(2)}',
-                          style: const TextStyle(color: primaryPurple, fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ListTile(
+                            onTap: () {
+                              setState(() {
+                                _selectedService = service;
+                                _selectedTimeSlot = null;
+                              });
+                              if (_selectedDate != null) {
+                                _generateAvailableTimeSlots();
+                              }
+                            },
+                            leading: _serviceThumb(service),
+                            title: Text(service['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text('${service['description']}\nDuration: ${service['duration']}'),
+                            isThreeLine: true,
+                            contentPadding: const EdgeInsets.only(left: 16, right: 52),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 104, right: 16, bottom: 12),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Expanded(
+                                  child: Wrap(
+                                    spacing: 8,
+                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                    children: [
+                                      ServiceRatingChip(
+                                        serviceId: service['id'] as String,
+                                        serviceName: service['name'] as String,
+                                      ),
+                                      if (service['deleteAt'] != null)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: Colors.orange.shade50,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            'Leaving soon',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.orange.shade800,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                _priceBox(service),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 72, bottom: 8),
-                        child: ServiceRatingChip(
-                          serviceId: service['id'] as String,
-                          serviceName: service['name'] as String,
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: GestureDetector(
+                          onTap: () => _toggleFavourite(service),
+                          child: Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.92),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.10),
+                                  blurRadius: 4,
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              _favourites.contains(service['id'].toString())
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              color: _favourites.contains(service['id'].toString())
+                                  ? Colors.red
+                                  : Colors.grey,
+                              size: 20,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -877,9 +1324,13 @@ class _BookingPageState extends State<BookingPage> {
               onTap: () async {
                 final picked = await showDatePicker(
                   context: context,
-                  initialDate: DateTime.now(),
+                  initialDate: (_selectedDate != null && _isDateAvailable(_selectedDate!))
+                      ? _selectedDate!
+                      : _firstAvailableDate(),
                   firstDate: DateTime.now(),
                   lastDate: DateTime.now().add(const Duration(days: 60)),
+                  selectableDayPredicate: _isDateAvailable,
+                  helpText: 'Select an available date',
                 );
                 if (picked != null) {
                   setState(() {
@@ -1133,6 +1584,73 @@ class _BookingPageState extends State<BookingPage> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ----------------------------------------------------------------
+// Full-screen picture viewer (used by the Bookings page and the Home page).
+// Pinch to zoom, drag to move around, tap the X or swipe back to close.
+// `path` can be a web link (http...) or a bundled asset path.
+// ----------------------------------------------------------------
+Future<void> showFullImage(BuildContext context, String path, {String? title}) {
+  final ImageProvider provider =
+  path.startsWith('http') ? NetworkImage(path) : AssetImage(path);
+  return Navigator.of(context).push<void>(
+    PageRouteBuilder<void>(
+      opaque: false,
+      barrierColor: Colors.black,
+      pageBuilder: (_, __, ___) => _FullImagePage(provider: provider, title: title),
+      transitionsBuilder: (_, animation, __, child) =>
+          FadeTransition(opacity: animation, child: child),
+    ),
+  );
+}
+
+class _FullImagePage extends StatelessWidget {
+  final ImageProvider provider;
+  final String? title;
+
+  const _FullImagePage({required this.provider, this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: title == null
+            ? null
+            : Text(title!, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: InteractiveViewer(
+            minScale: 1,
+            maxScale: 5,
+            child: Image(
+              image: provider,
+              fit: BoxFit.contain,
+              loadingBuilder: (context, child, progress) => progress == null
+                  ? child
+                  : const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+              errorBuilder: (_, __, ___) => const Icon(
+                Icons.broken_image_outlined,
+                color: Colors.white54,
+                size: 64,
+              ),
+            ),
+          ),
         ),
       ),
     );
