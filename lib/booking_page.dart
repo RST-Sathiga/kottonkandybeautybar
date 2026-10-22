@@ -1247,11 +1247,13 @@ class _BookingPageState extends State<BookingPage> {
                                 Expanded(
                                   child: Wrap(
                                     spacing: 8,
+                                    runSpacing: 4,
                                     crossAxisAlignment: WrapCrossAlignment.center,
                                     children: [
                                       ServiceRatingChip(
                                         serviceId: service['id'] as String,
                                         serviceName: service['name'] as String,
+                                        compact: true,
                                       ),
                                       if (service['deleteAt'] != null)
                                         Container(

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'product_reviews.dart';
 
 class FavoritesPage extends StatefulWidget {
   const FavoritesPage({super.key});
@@ -142,6 +143,152 @@ class _FavoritesPageState extends State<FavoritesPage> {
     }
   }
 
+  /// Full details for a favourite: picture, whole description, price and reviews.
+  void _showDetails(String id, Map<String, dynamic> fav) {
+    final String name = (fav['name'] ?? '').toString();
+    final String description = (fav['description'] ?? '').toString();
+    final bool isProduct = fav['isProduct'] == true || _products[id]?['isProduct'] == true;
+    final String? image = _imageFor(id, fav);
+    final info = _priceInfo(id, fav);
+    final IconData icon = _iconFor(id, fav);
+
+    final Widget placeholder = Container(
+      color: lightPurple,
+      child: Center(child: Icon(icon, color: primaryPurple, size: 60)),
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.88,
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 45,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: SizedBox(
+                    height: 200,
+                    width: double.infinity,
+                    child: image == null
+                        ? placeholder
+                        : (image.startsWith('http')
+                        ? Image.network(
+                      image,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => placeholder,
+                    )
+                        : Image.asset(
+                      image,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => placeholder,
+                    )),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    if (info.original != null) ...[
+                      Text(
+                        'R${info.original!.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          decoration: TextDecoration.lineThrough,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Text(
+                      'R${info.price.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        color: info.original != null ? const Color(0xFFD32F2F) : primaryPurple,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
+                    ),
+                    if (info.original != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD32F2F),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '-${info.percent.toStringAsFixed(0)}%',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ReviewSummaryButton(
+                  productId: id,
+                  productName: name,
+                  isProduct: isProduct,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  description.isNotEmpty ? description : 'No description available.',
+                  style: TextStyle(fontSize: 15, color: Colors.grey[700]),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: primaryPurple,
+                      side: const BorderSide(color: primaryPurple),
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                    ),
+                    child: const Text('CLOSE'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = _auth.currentUser;
@@ -210,94 +357,108 @@ class _FavoritesPageState extends State<FavoritesPage> {
               final description = (fav['description'] ?? '').toString();
               final info = _priceInfo(doc.id, fav);
 
-              return Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.07),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _showDetails(doc.id, fav),
+                child: Semantics(
+                  container: true,
+                  button: true,
+                  label: 'View full details for $name',
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.07),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    _thumb(_imageFor(doc.id, fav), _iconFor(doc.id, fav)),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                            ),
-                          ),
-                          if (description.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              description,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  fontSize: 12, color: Colors.grey[600]),
-                            ),
-                          ],
-                          const SizedBox(height: 8),
-                          if (info.original != null)
-                            Row(
-                              children: [
-                                Text(
-                                  'R${info.original!.toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 12,
-                                    decoration: TextDecoration.lineThrough,
-                                  ),
+                    child: Row(
+                      children: [
+                        _thumb(_imageFor(doc.id, fav), _iconFor(doc.id, fav)),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black,
                                 ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFD32F2F),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    '-${info.percent.toStringAsFixed(0)}%',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                              ),
+                              if (description.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  description,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.grey[600]),
                                 ),
                               ],
-                            ),
-                          Text(
-                            'R${info.price.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              color: info.original != null ? const Color(0xFFD32F2F) : primaryPurple,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
+                              const SizedBox(height: 8),
+                              if (info.original != null)
+                                Row(
+                                  children: [
+                                    Text(
+                                      'R${info.original!.toStringAsFixed(2)}',
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 12,
+                                        decoration: TextDecoration.lineThrough,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFD32F2F),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '-${info.percent.toStringAsFixed(0)}%',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              Text(
+                                'R${info.price.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  color: info.original != null ? const Color(0xFFD32F2F) : primaryPurple,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'Tap for full description and reviews',
+                                style: TextStyle(fontSize: 11, color: primaryPurple),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                        IconButton(
+                          tooltip: 'Remove from favourites',
+                          icon: const Icon(Icons.favorite, color: Colors.red),
+                          onPressed: () => _remove(user.uid, doc.id),
+                        ),
+                      ],
                     ),
-                    IconButton(
-                      tooltip: 'Remove from favourites',
-                      icon: const Icon(Icons.favorite, color: Colors.red),
-                      onPressed: () => _remove(user.uid, doc.id),
-                    ),
-                  ],
+                  ),
                 ),
               );
             },
