@@ -216,6 +216,17 @@
         .lki:hover,.lki.on{border-color:var(--p)}.lki b{display:block}.lki small{color:var(--mu);display:block;line-height:1.5}
         .lki .km{float:right;color:var(--p);font-weight:700}
         #lkMap{border-radius:14px;min-height:300px;z-index:0}
+        .lkside button,.lkside input{min-height:44px}
+        .lkside{overflow-y:auto;padding-right:4px}.lkside>*{flex-shrink:0}#lkList{overflow:visible;flex:none}.lkhelp pre{overflow-x:auto}
+        .lkmsg{margin:0;font-size:14px;line-height:1.5;min-height:20px}
+        .lkmsg.bad{color:#c62828;font-weight:600}
+        @media(prefers-color-scheme:dark){.lkmsg.bad{color:#ff8a80}}
+        .lkhelp{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.7}
+        .lkhelp a,.lki .dir{color:var(--pk);font-weight:600}
+        .lkact{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:8px}
+        .lkact button{padding:8px 14px;font-size:13px}
+        .lki.on{border-width:2px}
+        #lockers button:focus-visible,#lockers input:focus-visible,#lockers a:focus-visible{outline:3px solid var(--pk);outline-offset:2px}
         @media(max-width:700px){.lk{grid-template-columns:1fr;height:auto}#lkMap{height:50vh}}
         @media(max-width:700px){nav .grp{width:100%;margin:8px 4px 0}nav .grp:empty{display:none}#app{flex-direction:column;height:auto;overflow:visible}main{height:auto;overflow:visible}nav{height:auto;overflow:visible;width:100%;flex-direction:row;flex-wrap:wrap;padding:10px}nav h2{width:100%;margin:0 4px 6px}nav .out{margin:0 0 0 auto}.chat{grid-template-columns:1fr;height:auto}.clist{max-height:200px}.cview{height:60vh}}
         .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
@@ -267,6 +278,8 @@
         .bkface small{display:block;font-weight:400;color:var(--mu);font-size:11.5px}
         .bkface.none{color:var(--mu);font-weight:500}
         .bkwas{font-size:12px;color:#8e24aa;background:#8e24aa18;border-radius:8px;padding:5px 10px}
+        .bkcx{font-size:13px;line-height:1.6;background:#e5393514;border-left:3px solid #e53935;border-radius:8px;padding:8px 12px}
+        .bkact button.done{background:#2e7d32;color:#fff}
         .bkact{display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--bd);padding-top:12px}
         .bkact select{margin:0;padding:7px 8px;width:auto;flex:1;min-width:110px;font-size:13px}
         .bkact button{padding:7px 12px;font-size:13px;margin:0}
@@ -463,18 +476,22 @@
             <h3>Nearest PUDO lockers</h3>
             <div class="lk">
                 <div class="lkside">
-                    <div class="lkbar">
-                        <input id="lkAddr" placeholder="Type your address or suburb, e.g. Sandton">
-                        <button id="lkSearch">Search</button>
+                    <div role="search" aria-label="Find the nearest PUDO locker">
+                        <label class="lbl" for="lkAddr" style="font-size:14px">Your address or suburb</label>
+                        <div class="lkbar">
+                            <input id="lkAddr" type="search" placeholder="e.g. Sandton, Johannesburg" autocomplete="street-address" enterkeyhint="search">
+                            <button id="lkSearch" type="button">Search</button>
+                        </div>
+                        <div class="lkbar" style="margin-top:8px">
+                            <button class="sec" id="lkGps" type="button">Use my current location</button>
+                            <button class="ghost" id="lkSave" type="button">Save as my location</button>
+                        </div>
                     </div>
-                    <div class="lkbar">
-                        <button class="sec" id="lkGps">Use my location</button>
-                        <button class="ghost" id="lkSave">Save as my location</button>
-                    </div>
-                    <div class="sub" id="lkStatus" style="margin:0;font-size:13px"></div>
-                    <div id="lkList"></div>
+                    <div class="lkmsg" id="lkStatus" role="status" aria-live="polite">Type your address or press “Use my current location” to find the nearest lockers.</div>
+                    <div class="lkhelp hide" id="lkHelp"></div>
+                    <div id="lkList" role="list" aria-label="Nearest lockers"></div>
                 </div>
-                <div id="lkMap"></div>
+                <div id="lkMap" role="region" aria-label="Map of nearby lockers. The same lockers are listed as text next to the map."></div>
             </div>
             <p class="sub" style="font-size:12px;margin-top:12px">Lockers come from the official PUDO list when it is available. Otherwise this page uses parcel lockers mapped on OpenStreetMap, which may not include every PUDO locker. Always confirm the locker on the <a href="https://www.pudo.co.za" target="_blank" rel="noopener" style="color:var(--p)">official PUDO website or app</a> before sending a parcel. If you get an official locker list file, save it as <b>lockers.json</b> next to this page and it will be used instead.</p>
         </section>
@@ -674,14 +691,23 @@
 
 <div id="delModal" class="modal hide">
     <div class="mbox">
-        <h4>Delete booking</h4>
+        <h4>Cancel booking</h4>
         <p class="sub" id="dlInfo"></p>
-        <textarea id="dlReason" placeholder="Reason for deleting (required). The client will see this."></textarea>
-        <p class="sub hide" id="dlRefundNote" style="font-size:13px">This booking was paid, so a full refund request will be created automatically in the Refunds tab.</p>
+        <label class="lbl" for="dlPreset">Reason for cancelling (required, the client will see it)</label>
+        <select id="dlPreset">
+            <option value="">Choose a reason…</option>
+            <option>Stylist unavailable</option>
+            <option>Salon closed</option>
+            <option>Emergency</option>
+            <option>Service no longer available</option>
+            <option>Other</option>
+        </select>
+        <textarea id="dlReason" placeholder="More details (required if you chose Other)"></textarea>
+        <p class="sub" id="dlRefundNote" style="font-size:13px"></p>
         <div class="err" id="dlErr"></div>
         <div class="mbtns">
-            <button class="ghost" id="dlCancel">Cancel</button>
-            <button class="del" id="dlConfirm" style="padding:11px 18px;font-size:inherit">Delete booking</button>
+            <button class="ghost" id="dlCancel">Keep booking</button>
+            <button class="del" id="dlConfirm" style="padding:11px 18px;font-size:inherit">Cancel booking</button>
         </div>
     </div>
 </div>
@@ -1043,13 +1069,29 @@
       renderBookingsTable();
     }
 
+    // What the salon sees on a cancelled booking: who cancelled, why, and where the refund is
+    function cancelSummary(b, rf) {
+      const by = b.cancelledBy === 'admin' ? 'the salon' : b.cancelledBy === 'client' ? 'the client' : '';
+      const reason = b.cancelReason || (rf && rf.note) || '';
+      let refund;
+      if (rf) {
+        const amt = money(refAmt(rf));
+        refund = rStatus(rf) === 'declined' ? 'Refund request declined' : (rf.refundSent ? 'Refund of ' + amt + ' sent' : 'Full refund of ' + amt + ' pending. Send it from the Refunds tab');
+      } else if (String(b.paymentStatus || '').toLowerCase() === 'paid') refund = 'Warning: this paid booking has no refund request. Check the Refunds tab';
+      else refund = 'No payment was taken, so no refund is needed';
+      return `<div class="bkcx"><b>Cancelled${by ? ' by ' + by : ''}</b>${reason ? '<br>Reason: ' + esc(reason) : ''}<br>${esc(refund)}</div>`;
+    }
+    // Completed can only be set once the appointment time has passed
+    const apptStarted = b => { const d = apptDay(b); if (!d) return false; return new Date(d + 'T' + (to24(bTime(b)) || '00:00') + ':00') <= new Date(); };
+
     function bookingCard(b) {
       const st = bStatus(b), day = apptDay(b), dt = day ? new Date(day + 'T00:00:00') : null;
       const u = userOf(b), name = uFullName(u), email = uEmail(u) || b.userEmail || b.email || '';
       const pay = String(b.paymentStatus || '—').toLowerCase();
       const payCls = pay === 'paid' ? 'bs-paid' : (pay === 'initialized' || pay === 'pending') ? 'bs-pending' : pay === 'failed' ? 'bs-failed' : '';
-      const opts = ALL_STATUS.includes(st) ? ALL_STATUS : [...ALL_STATUS, st];
-      const canMove = !['cancelled', 'failed', 'completed'].includes(st);
+      const active = !['cancelled', 'failed', 'completed'].includes(st);
+      const canRemove = !active && st !== 'completed' && pay !== 'paid';
+      const rf = refunds.find(r => r.id === b.id || r.appointmentId === b.id);
       return `<div class="bk ${esc(st)}">
         <div class="bkhead">
           <div class="bkdate"><small>${dt ? esc(dt.toLocaleDateString([], { weekday: 'short' })) : ''}</small><b>${dt ? dt.getDate() : '?'}</b><span>${dt ? esc(dt.toLocaleDateString([], { month: 'short' })) : ''}</span></div>
@@ -1059,18 +1101,19 @@
         <div class="bkwho">${avatar(u, name || email)}<div><b>${esc(name || email || 'Unknown client')}</b><small>${esc(name ? email : '')}${u.phone || u.phoneNumber ? (name && email ? ' · ' : '') + esc(u.phone || u.phoneNumber) : ''}</small></div></div>
         <div class="bkrow">
           <span class="bkprice">R${esc(bPrice(b))}</span>
-          <span class="chip ${payCls}">${esc(pay === '—' ? 'No payment' : pay)}</span>
+          <span class="chip ${payCls}" title="Set automatically by Paystack. It cannot be changed here.">${esc(pay === '—' ? 'No payment' : pay)}</span>
           ${bPhoto(b) ? `<img class="ph" src="${esc(bPhoto(b))}" onclick="showPhoto('${b.id}')" alt="Reference">` : ''}
         </div>
         ${!['cancelled', 'failed', 'completed'].includes(st) ? (b.facePhotoUrl
           ? `<div class="bkface"><img class="ph" src="${esc(b.facePhotoUrl)}" onclick="showImg(this.src)" alt="Client face photo"><span>Face photo received<small>Check it matches the client on arrival</small></span></div>`
           : `<div class="bkface none"><span>Face photo not sent yet</span></div>`) : ''}
         ${b.previousDate ? `<div class="bkwas">↻ Moved from ${esc(b.previousDate)} ${esc(b.previousTime || '')}</div>` : ''}
-        <div class="bkact">
-          <select onchange="setStatus('${b.id}',this.value)">${opts.map(o => `<option ${o === st ? 'selected' : ''}>${o}</option>`).join('')}</select>
-          ${canMove ? `<button class="resched" onclick="openResched('${b.id}')">Reschedule</button>` : ''}
-          <button class="del" onclick="openDelete('${b.id}')">Delete</button>
-        </div>
+        ${st === 'cancelled' ? cancelSummary(b, rf) : ''}
+        ${active || canRemove ? `<div class="bkact">
+          ${active && apptStarted(b) ? `<button class="done" onclick="markCompleted('${b.id}')">Mark completed</button>` : ''}
+          ${active ? `<button class="resched" onclick="openResched('${b.id}')">Reschedule</button><button class="del" onclick="openDelete('${b.id}')">Cancel booking</button>` : ''}
+          ${canRemove ? `<button class="ghost" onclick="removeBooking('${b.id}')">Remove from list</button>` : ''}
+        </div>` : ''}
       </div>`;
     }
 
@@ -1126,39 +1169,64 @@
       } catch (e) { $('rsErr').textContent = e.message; }
       $('rsSave').disabled = false;
     };
+    // Cancelling keeps the booking record (status "cancelled" + reason) and raises a full refund request if it was paid.
+    // Payment status is never changed here: it is set by Paystack only.
     window.openDelete = id => {
       const b = bookings.find(x => x.id === id); if (!b) return;
       dlBooking = b;
       $('dlInfo').textContent = `${bName(b)} · ${bWho(b)} · ${bDate(b)} ${bTime(b)}`;
-      $('dlReason').value = ''; $('dlErr').textContent = '';
-      $('dlRefundNote').classList.toggle('hide', !(b.paymentStatus === 'paid' && !hasRefund(b)));
-      $('delModal').classList.remove('hide'); $('dlReason').focus();
+      $('dlPreset').value = ''; $('dlReason').value = ''; $('dlErr').textContent = '';
+      const paid = b.paymentStatus === 'paid';
+      $('dlRefundNote').textContent = !paid ? 'No payment was taken for this booking, so no refund is needed.'
+        : hasRefund(b) ? 'A refund request already exists for this booking.'
+        : `This booking was paid (${money(Number(b.amountPaid ?? bPrice(b)))}). The client will be refunded in full. A refund request is created automatically in the Refunds tab, where you send it on Paystack.`;
+      $('delModal').classList.remove('hide'); $('dlPreset').focus();
     };
     $('dlCancel').onclick = () => $('delModal').classList.add('hide');
     $('dlConfirm').onclick = async () => {
-      const b = dlBooking, reason = $('dlReason').value.trim();
-      if (!reason) { $('dlErr').textContent = 'Please give a reason for deleting this booking.'; return; }
+      const b = dlBooking, preset = $('dlPreset').value, detail = $('dlReason').value.trim();
+      if (!b || ['cancelled', 'failed', 'completed'].includes(bStatus(b))) { $('delModal').classList.add('hide'); return; }
+      if (!preset) { $('dlErr').textContent = 'Please choose a reason for cancelling.'; return; }
+      if (preset === 'Other' && !detail) { $('dlErr').textContent = 'Please describe the reason.'; return; }
+      const reason = detail ? `${preset}: ${detail}` : preset;
       $('dlConfirm').disabled = true;
       try {
         const refund = b.paymentStatus === 'paid' && !hasRefund(b);
+        const amt = Number(b.amountPaid ?? bPrice(b));
         const batch = db.batch();
+        batch.update(db.collection(COL.bookings).doc(b.id), {
+          status: 'cancelled', cancelledBy: 'admin', cancelReason: reason, cancelledAt: FV.serverTimestamp(),
+          refundStatus: b.paymentStatus === 'paid' ? 'full_refund_pending' : 'not_required'
+        });
         if (refund) {
-          const amt = Number(b.amountPaid ?? bPrice(b));
           batch.set(db.collection(COL.refunds).doc(b.id), {
             appointmentId: b.id, userId: b.userId || '', userEmail: bWho(b), serviceName: bName(b),
             appointmentDateText: bDate(b) + ' ' + bTime(b), total: amt, reason: 'ownerCancelled', note: reason,
             fee: 0, refundAmount: amt, status: 'approved', paymentReference: b.paymentReference || '',
-            adminReason: 'Your appointment was cancelled by the salon: ' + reason + ' You will receive a full refund.',
+            adminReason: 'Your appointment was cancelled by the salon: ' + reason + '. You will receive a full refund.',
             refundSent: false, createdAt: FV.serverTimestamp(), decidedAt: FV.serverTimestamp()
           });
         }
-        batch.delete(db.collection(COL.bookings).doc(b.id));
         await batch.commit();
         if (b.userId) await notifyClient(b.userId, 'Booking cancelled',
-          `Your ${bName(b)} booking on ${bDate(b)} ${bTime(b)} was cancelled by the salon. Reason: ${reason}` + (refund ? ' You will receive a full refund.' : '')).catch(console.error);
+          `Your ${bName(b)} booking on ${bDate(b)} ${bTime(b)} was cancelled by the salon. Reason: ${reason}.` + (b.paymentStatus === 'paid' ? ` You will receive a full refund of ${money(amt)}.` : '')).catch(console.error);
         $('delModal').classList.add('hide');
       } catch (e) { $('dlErr').textContent = e.message; }
       $('dlConfirm').disabled = false;
+    };
+    window.markCompleted = async id => {
+      const b = bookings.find(x => x.id === id); if (!b || ['cancelled', 'failed', 'completed'].includes(bStatus(b))) return;
+      if (!confirm('Mark this appointment as completed? This cannot be undone.')) return;
+      try {
+        await db.collection(COL.bookings).doc(id).update({ status: 'completed', completedAt: FV.serverTimestamp(), completedBy: 'admin' });
+        if (b.userId) await notifyClient(b.userId, 'Appointment completed', `Thank you for visiting Kotton Kandy! Your ${bName(b)} appointment is complete. We would love to hear how it went.`).catch(console.error);
+      } catch (e) { alert(e.message); }
+    };
+    // Only unpaid, cancelled/failed bookings can be removed. Paid bookings are never deleted (money trail).
+    window.removeBooking = id => {
+      const b = bookings.find(x => x.id === id); if (!b || b.paymentStatus === 'paid') return;
+      if (!confirm('Remove this unpaid booking from the list permanently?')) return;
+      db.collection(COL.bookings).doc(id).delete().catch(e => alert(e.message));
     };
 
     // ---- Alerts for the owner: sound, desktop notification, toast and tab-title count ----
@@ -2104,115 +2172,245 @@
       $('oSave').disabled = false;
     };
 
-    const LOCKER_URL = 'https://api-tcg.co.za/lockers-data';
-    let lkMap = null, lkMarkers = [], lkYou = null, lkData = null, lkPos = null;
+    const LOCKER_URL = 'https://api-tcg.co.za/lockers-data';           // older full list
+    const SHIPLOGIC = 'https://api.shiplogic.com/pickup-points';       // The Courier Guy's official locker search
+    const PUDO_FINDER = 'https://www.pudo.co.za';
+    const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.openstreetmap.fr/api/interpreter'];
+    let lkMap = null, lkMarkers = [], lkYou = null, lkData = null, lkPos = null, lkInit = false, lkWorking = false, lkOfficialDown = false, lkLog = [];
+    const lkNote = s => { lkLog.push(s); console.warn('Lockers:', s); };
 
     const kmBetween = (a, b, c, d) => {
       const r = x => x * Math.PI / 180, R = 6371;
       const h = Math.sin(r(c - a) / 2) ** 2 + Math.cos(r(a)) * Math.cos(r(c)) * Math.sin(r(d - b) / 2) ** 2;
       return 2 * R * Math.asin(Math.sqrt(h));
     };
-    async function loadLockerData() {
-      if (lkData) return lkData;
-      let raw = null;
-      try { raw = JSON.parse(localStorage.getItem('kk_lockers') || 'null'); } catch (e) {}
-      const tryUrl = async url => { const r = await fetch(url); if (!r.ok) throw new Error(r.status); return r.json(); };
-      for (const url of [LOCKER_URL, 'lockers.json']) {
-        try { raw = await tryUrl(url); try { localStorage.setItem('kk_lockers', JSON.stringify(raw)); } catch (e) {} break; } catch (e) { console.warn('Lockers:', url, e); }
-      }
-      if (!raw) throw new Error('Could not load the locker list.');
-      const arr = Array.isArray(raw) ? raw : (raw.data || raw.lockers || raw.results || []);
-      lkData = arr.map(x => ({
-        code: x.code, name: x.name, address: x.address || '',
-        lat: parseFloat(x.latitude ?? x.lat), lng: parseFloat(x.longitude ?? x.lng ?? x.lon),
-        town: x.place?.town || '', type: x.type?.name || '', hours: x.openinghours || []
-      })).filter(l => isFinite(l.lat) && isFinite(l.lng));
-      return lkData;
+    // fetch that gives up after a while instead of hanging forever
+    async function fetchT(url, opts, ms) {
+      const c = new AbortController(), t = setTimeout(() => c.abort(), ms || 12000);
+      try { return await fetch(url, { ...(opts || {}), signal: c.signal }); } finally { clearTimeout(t); }
     }
+    const lkSay = (m, bad) => {
+      const s = $('lkStatus'); s.textContent = (bad ? 'Problem: ' : '') + m; s.classList.toggle('bad', !!bad);
+      $('lkHelp').classList.add('hide');
+    };
+    const lkBusy = on => { lkWorking = on; $('lkList').setAttribute('aria-busy', on ? 'true' : 'false'); };
+    const gmapsFind = () => lkPos ? `https://www.google.com/maps/search/PUDO+locker/@${lkPos.lat},${lkPos.lng},13z` : 'https://www.google.com/maps/search/PUDO+locker';
+    // Clear, specific error + things the user can do next
+    function lkFail(msg, retry, retryLabel) {
+      lkBusy(false); lkSay(msg, true); $('lkList').innerHTML = '';
+      $('lkHelp').innerHTML = '<b>What you can do:</b><ul style="margin:6px 0 0;padding-left:20px">'
+        + (retry ? `<li><button type="button" class="ghost" id="lkRetry">${esc(retryLabel || 'Try again')}</button></li>` : '')
+        + `<li><a href="${gmapsFind()}" target="_blank" rel="noopener">Search for PUDO lockers on Google Maps</a></li>`
+        + `<li><a href="${PUDO_FINDER}" target="_blank" rel="noopener">Open the official PUDO locker finder</a></li></ul>`
+        + (lkLog.length ? `<details style="margin-top:8px"><summary>Technical details</summary><pre style="white-space:pre-wrap;font-size:12px;margin:6px 0 0">${esc(lkLog.join('\n'))}</pre></details>` : '');
+      $('lkHelp').classList.remove('hide');
+      if (retry) $('lkRetry').onclick = retry;
+    }
+
+    // Reads lockers from several possible response shapes
+    const num = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(n) ? n : NaN; };
+    function normLocker(x) {
+      if (!x || typeof x !== 'object') return null;
+      const a = (x.address && typeof x.address === 'object') ? x.address : {};
+      const lat = num(x.latitude ?? x.lat ?? a.lat ?? a.latitude ?? x.location?.lat ?? x.location?.latitude ?? x.coordinates?.lat ?? x.geo?.lat);
+      const lng = num(x.longitude ?? x.lng ?? x.lon ?? a.lng ?? a.longitude ?? x.location?.lng ?? x.location?.longitude ?? x.coordinates?.lng ?? x.geo?.lng);
+      if (!isFinite(lat) || !isFinite(lng)) return null;
+      const addr = typeof x.address === 'string' ? x.address : [a.street_address, a.local_area || a.suburb, a.city].filter(Boolean).join(', ');
+      return {
+        code: x.pickup_point_id ?? x.code ?? x.id ?? '', name: x.name || a.company || x.code || 'Locker', address: addr || '',
+        lat, lng, town: x.place?.town || '', type: x.type?.name || (typeof x.type === 'string' ? x.type : ''),
+        hours: Array.isArray(x.openinghours) ? x.openinghours : (Array.isArray(x.opening_hours) ? x.opening_hours : [])
+      };
+    }
+    const findArr = j => Array.isArray(j) ? j : (j && typeof j === 'object' ? (j.pickup_points || j.data || j.lockers || j.results || Object.values(j).find(Array.isArray) || []) : []);
+    const parseLockers = j => (Array.isArray(findArr(j)) ? findArr(j) : []).map(normLocker).filter(Boolean);
+
+    // Source 1: The Courier Guy's official locker search. Tries several request styles and logs what the server says.
+    async function loadNearbyOfficial(lat, lng, label) {
+      const d = 0.25;
+      const variants = [
+        ['nearby lockers', `?lat=${lat}&lng=${lng}&order_closest=true&type=locker`],
+        ['nearby', `?lat=${lat}&lng=${lng}&order_closest=true`],
+        ['area box', `?min_lat=${lat - d}&max_lat=${lat + d}&min_lng=${lng - d}&max_lng=${lng + d}&type=locker`]
+      ];
+      if (label && !/current location/i.test(label)) variants.push(['by name', '?search=' + encodeURIComponent(label)]);
+      for (const [nm, qs] of variants) {
+        try {
+          const r = await fetchT(SHIPLOGIC + qs, { headers: { Accept: 'application/json' } }, 10000);
+          const txt = await r.text();
+          if (!r.ok) { lkNote(`Courier Guy ${nm}: HTTP ${r.status} ${txt.slice(0, 140)}`); continue; }
+          let list = [];
+          try { list = parseLockers(JSON.parse(txt)); } catch (e) { lkNote(`Courier Guy ${nm}: unreadable reply: ${txt.slice(0, 100)}`); continue; }
+          lkNote(`Courier Guy ${nm}: ${list.length} found`);
+          if (list.length) return list;
+        } catch (e) { lkNote(`Courier Guy ${nm}: ${e.name === 'AbortError' ? 'timed out' : (e.message || e)}`); }
+      }
+      return null;
+    }
+    // Source 2: the older full list of every locker
+    async function loadLockerData() {
+      if (lkData && lkData.length) return lkData;
+      let raw = null;
+      if (!lkOfficialDown) {
+        for (const url of [LOCKER_URL, 'lockers.json']) {
+          try {
+            const r = await fetchT(url, {}, 10000);
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const j = await r.json();
+            if (!parseLockers(j).length) throw new Error('list was empty');
+            raw = j; try { localStorage.setItem('kk_lockers', JSON.stringify(j)); } catch (e) {}
+            break;
+          } catch (e) { lkNote('Full list (' + url + '): ' + (e.message || e)); }
+        }
+        if (!raw) lkOfficialDown = true; // do not wait for it again this session
+      }
+      if (!raw) { try { raw = JSON.parse(localStorage.getItem('kk_lockers') || 'null'); } catch (e) {} }
+      const list = raw ? parseLockers(raw) : [];
+      if (!list.length) throw new Error('Official locker list unavailable');
+      return (lkData = list);
+    }
+    // Source 3: OpenStreetMap. Asks all servers at once (first answer wins) and searches wider if needed.
     async function loadOsmLockers(lat, lng) {
-      const q = `[out:json][timeout:25];nwr["amenity"="parcel_locker"](around:40000,${lat},${lng});out center 300;`;
-      const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(q) });
-      if (!r.ok) throw new Error('OpenStreetMap lookup failed (' + r.status + ')');
-      const els = (await r.json()).elements || [];
-      const all = els.map(e => {
-        const g = e.tags || {};
-        const label = [g.operator, g.brand, g.name, g.network].filter(Boolean).join(' ');
-        return { code: g.ref || ('OSM-' + e.id), name: g.name || g.operator || g.brand || 'Parcel locker',
-          address: [g['addr:housenumber'], g['addr:street'], g['addr:suburb'] || g['addr:city']].filter(Boolean).join(' ') || (g.description || ''),
-          lat: e.lat ?? e.center?.lat, lng: e.lon ?? e.center?.lon, town: '', type: 'Parcel locker (OpenStreetMap)', hours: [],
-          pudo: /pudo|courier\s*guy|tcg/i.test(label) };
-      }).filter(l => isFinite(l.lat) && isFinite(l.lng));
-      const pudo = all.filter(l => l.pudo);
-      return pudo.length ? { list: pudo, note: 'PUDO / Courier Guy lockers from OpenStreetMap' }
-        : { list: all, note: 'Parcel lockers from OpenStreetMap (could not confirm which are PUDO)' };
+      for (const rad of [10000, 40000, 100000]) {
+        const dLat = rad / 111000, dLng = rad / (111000 * Math.cos(lat * Math.PI / 180));
+        const q = `[out:json][timeout:20][bbox:${lat - dLat},${lng - dLng},${lat + dLat},${lng + dLng}];nwr["amenity"="parcel_locker"];out center 300;`;
+        let els;
+        try {
+          els = await Promise.any(OVERPASS.map(async ep => {
+            try {
+              const r = await fetchT(ep, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) }, 22000);
+              if (!r.ok) throw new Error('status ' + r.status);
+              return (await r.json()).elements || [];
+            } catch (e) { lkNote('OpenStreetMap (' + ep.split('/')[2] + '): ' + (e.name === 'AbortError' ? 'timed out' : (e.message || e))); throw e; }
+          }));
+        } catch (e) { throw new Error('All OpenStreetMap servers are busy right now'); }
+        if (!els.length) continue;
+        const all = els.map(e => {
+          const g = e.tags || {};
+          const label = [g.operator, g.brand, g.name, g.network].filter(Boolean).join(' ');
+          return { code: g.ref || ('OSM-' + e.id), name: g.name || g.operator || g.brand || 'Parcel locker',
+            address: [g['addr:housenumber'], g['addr:street'], g['addr:suburb'] || g['addr:city']].filter(Boolean).join(' ') || (g.description || ''),
+            lat: e.lat ?? e.center?.lat, lng: e.lon ?? e.center?.lon, town: '', type: 'Parcel locker (OpenStreetMap)', hours: [],
+            pudo: /pudo|courier\s*guy|tcg/i.test(label) };
+        }).filter(l => isFinite(l.lat) && isFinite(l.lng));
+        const pudo = all.filter(l => l.pudo);
+        lkNote('OpenStreetMap: ' + all.length + ' parcel lockers within ' + (rad / 1000) + ' km (' + pudo.length + ' marked PUDO)');
+        return pudo.length ? { list: pudo, note: 'PUDO / Courier Guy lockers from OpenStreetMap' }
+          : { list: all, note: 'Parcel lockers from OpenStreetMap (could not confirm which are PUDO)' };
+      }
+      return { list: [], note: '' };
     }
     const todayHours = l => {
+      if (!Array.isArray(l.hours) || !l.hours.length) return '';
       const d = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-      const h = (l.hours || []).find(x => String(x.day || '').toLowerCase().startsWith(d.slice(0, 3)));
+      const h = l.hours.find(x => x && String(x.day || '').toLowerCase().startsWith(d.slice(0, 3)));
       return h ? (h.open_time && h.close_time ? `${String(h.open_time).slice(0, 5)} - ${String(h.close_time).slice(0, 5)}` : 'Closed today') : '';
     };
     async function initLockers() {
-      if (!lkMap) {
+      if (!lkMap && typeof L !== 'undefined') {
         lkMap = L.map('lkMap').setView([-26.2, 28.05], 9);
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(lkMap);
-        try { const s = JSON.parse(localStorage.getItem('kk_owner_loc') || 'null'); if (s) { $('lkAddr').value = s.label || ''; showNearest(s.lat, s.lng); } } catch (e) {}
+      } else if (!lkMap && typeof L === 'undefined') {
+        $('lkMap').innerHTML = '<div class="empty">The map could not load. You can still search; the lockers are listed as text.</div>';
       }
-      setTimeout(() => lkMap.invalidateSize(), 50);
+      if (!lkInit) {
+        lkInit = true;
+        try { const s = JSON.parse(localStorage.getItem('kk_owner_loc') || 'null'); if (s) { $('lkAddr').value = s.label || ''; showNearest(s.lat, s.lng, s.label); } } catch (e) {}
+      }
+      if (lkMap) setTimeout(() => lkMap.invalidateSize(), 50);
     }
     async function showNearest(lat, lng, label) {
+      try { await showNearestInner(lat, lng, label); }
+      catch (e) { console.error(e); lkNote('Unexpected error: ' + (e.message || e)); lkFail('Something went wrong while showing the lockers.', () => showNearest(lat, lng, label)); }
+    }
+    async function showNearestInner(lat, lng, label) {
       lkPos = { lat, lng, label: label || $('lkAddr').value };
-      $('lkStatus').textContent = 'Loading lockers...';
-      let data, note = '';
-      try { data = await loadLockerData(); note = 'Official PUDO list'; } catch (e) {
+      lkLog = []; lkBusy(true); lkSay('Looking for lockers near you…');
+      let data = await loadNearbyOfficial(lat, lng, lkPos.label), note = 'Official Courier Guy / PUDO locker search';
+      if (!data) {
+        try { data = await loadLockerData(); note = 'Official PUDO list'; } catch (e) { lkNote('Full list: ' + (e.message || e)); }
+      }
+      if (!data) {
         try {
-          $('lkStatus').textContent = 'Official list unavailable. Searching OpenStreetMap...';
+          lkSay('The official lists are not available, so we are searching OpenStreetMap instead. This can take a few seconds…');
           const o = await loadOsmLockers(lat, lng); data = o.list; note = o.note;
         } catch (e2) {
-          $('lkStatus').textContent = 'Could not load any locker list (' + e2.message + '). See the note at the bottom of this page.'; return;
+          return lkFail('We could not load any locker list. This is usually a busy server or a weak internet connection, not a problem with your address.', () => showNearest(lat, lng, label));
         }
       }
-      if (!data.length) { $('lkStatus').textContent = 'No lockers found near this location in the data available. Use the official PUDO locker finder linked below.'; return; }
-      lkMarkers.forEach(m => m.remove()); lkMarkers = [];
-      if (lkYou) lkYou.remove();
-      lkYou = L.circleMarker([lat, lng], { radius: 9, color: '#E91E63', fillColor: '#E91E63', fillOpacity: .9 }).addTo(lkMap).bindPopup('You are here');
+      if (!data.length) return lkFail('No parcel lockers were found within 100 km of this location in the data we can reach. Try a nearby suburb, or use the links below.', () => showNearest(lat, lng, label));
       const near = data.map(l => ({ ...l, km: kmBetween(lat, lng, l.lat, l.lng) })).sort((a, b) => a.km - b.km).slice(0, 10);
-      $('lkStatus').textContent = 'Showing the ' + near.length + ' closest of ' + data.length + ' lockers. Source: ' + note + '.';
-      $('lkList').innerHTML = near.map((l, i) => `<div class="lki" data-i="${i}">
+      if (lkMap) {
+        lkMarkers.forEach(m => m.remove()); lkMarkers = [];
+        if (lkYou) lkYou.remove();
+        lkYou = L.circleMarker([lat, lng], { radius: 9, color: '#E91E63', fillColor: '#E91E63', fillOpacity: .9 }).addTo(lkMap).bindPopup('You are here');
+      }
+      lkBusy(false);
+      lkSay(`Showing the ${near.length} closest lockers to ${lkPos.label || 'you'}. Nearest: ${near[0].name || near[0].code}, ${near[0].km.toFixed(1)} km away. Source: ${note}.`);
+      $('lkList').innerHTML = near.map((l, i) => `<div class="lki" role="listitem" data-i="${i}">
         <span class="km">${l.km.toFixed(1)} km</span><b>${esc(l.name || l.code)}</b>
-        <small>${esc(l.address)}${l.town ? ', ' + esc(l.town) : ''}<br>Code: <b style="display:inline">${esc(l.code)}</b>${l.type ? ' · ' + esc(l.type) : ''}${todayHours(l) ? '<br>Today: ' + esc(todayHours(l)) : ''}</small></div>`).join('');
-      near.forEach((l, i) => {
-        const m = L.marker([l.lat, l.lng]).addTo(lkMap)
-          .bindPopup(`<b>${esc(l.name || l.code)}</b><br>${esc(l.address)}<br>Code: ${esc(l.code)}<br>${l.km.toFixed(1)} km away`);
-        m.on('click', () => document.querySelectorAll('.lki').forEach(e => e.classList.toggle('on', +e.dataset.i === i)));
-        lkMarkers.push(m);
-      });
-      document.querySelectorAll('.lki').forEach(e => e.onclick = () => {
-        const i = +e.dataset.i; lkMap.setView([near[i].lat, near[i].lng], 16); lkMarkers[i].openPopup();
-        document.querySelectorAll('.lki').forEach(x => x.classList.toggle('on', x === e));
-      });
-      lkMap.fitBounds(L.latLngBounds([[lat, lng], ...near.slice(0, 5).map(l => [l.lat, l.lng])]).pad(.2));
+        <small>${esc(l.address)}${l.town ? ', ' + esc(l.town) : ''}<br>Code: <b style="display:inline">${esc(l.code)}</b>${l.type ? ' · ' + esc(l.type) : ''}${todayHours(l) ? '<br>Today: ' + esc(todayHours(l)) : ''}</small>
+        <div class="lkact">${lkMap ? `<button type="button" class="ghost lkpick" data-i="${i}">Show on map</button>` : ''}<a class="dir" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&origin=${lat},${lng}&destination=${l.lat},${l.lng}">Get directions (opens Google Maps)</a></div></div>`).join('');
+      const mark = i => document.querySelectorAll('.lki').forEach(e => e.classList.toggle('on', +e.dataset.i === i));
+      const pick = i => { if (!lkMap) return; lkMap.setView([near[i].lat, near[i].lng], 16); lkMarkers[i].openPopup(); mark(i); };
+      if (lkMap) {
+        near.forEach((l, i) => {
+          const m = L.marker([l.lat, l.lng]).addTo(lkMap)
+            .bindPopup(`<b>${esc(l.name || l.code)}</b><br>${esc(l.address)}<br>Code: ${esc(l.code)}<br>${l.km.toFixed(1)} km away`);
+          m.on('click', () => mark(i));
+          lkMarkers.push(m);
+        });
+        document.querySelectorAll('.lkpick').forEach(b => b.onclick = ev => { ev.stopPropagation(); pick(+b.dataset.i); });
+        document.querySelectorAll('.lki').forEach(e => e.onclick = ev => { if (!ev.target.closest('a,button')) pick(+e.dataset.i); });
+        lkMap.fitBounds(L.latLngBounds([[lat, lng], ...near.slice(0, 5).map(l => [l.lat, l.lng])]).pad(.2));
+      }
+    }
+    async function geocode(q) {
+      const urls = [
+        'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=za&q=' + encodeURIComponent(q),
+        'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(/south africa/i.test(q) ? q : q + ', South Africa')
+      ];
+      let answered = false;
+      for (const u of urls) {
+        try {
+          const r = await fetchT(u, {}, 10000);
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          answered = true;
+          const j = await r.json();
+          if (j.length) return { lat: parseFloat(j[0].lat), lng: parseFloat(j[0].lon) };
+        } catch (e) { console.warn('Geocode:', e); }
+      }
+      return answered ? null : undefined; // null = address not found, undefined = lookup service unreachable
     }
     $('lkSearch').onclick = async () => {
-      const q = $('lkAddr').value.trim(); if (!q) return;
-      $('lkStatus').textContent = 'Finding your address...';
-      try {
-        const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=za&q=' + encodeURIComponent(q));
-        const j = await r.json();
-        if (!j.length) { $('lkStatus').textContent = 'Address not found. Try adding the suburb and city.'; return; }
-        showNearest(parseFloat(j[0].lat), parseFloat(j[0].lon), q);
-      } catch (e) { $('lkStatus').textContent = 'Could not look up that address: ' + e.message; }
+      if (lkWorking) return;
+      const q = $('lkAddr').value.trim();
+      if (!q) { lkSay('Please type your address or suburb first, or press “Use my current location”.', true); $('lkAddr').focus(); return; }
+      lkBusy(true); lkSay('Finding your address…');
+      const g = await geocode(q);
+      if (g === undefined) return lkFail('We could not look up that address. Check your internet connection and try again, or use “Use my current location”.', () => $('lkSearch').click());
+      if (g === null) return lkFail(`We could not find “${q}”. Try a suburb and city, for example “Sandton, Johannesburg”.`, () => { $('lkAddr').focus(); $('lkAddr').select(); }, 'Edit my address');
+      showNearest(g.lat, g.lng, q);
     };
     $('lkAddr').onkeydown = e => { if (e.key === 'Enter') $('lkSearch').click(); };
     $('lkGps').onclick = () => {
-      if (!navigator.geolocation) { $('lkStatus').textContent = 'Your browser cannot share its location.'; return; }
-      $('lkStatus').textContent = 'Getting your location...';
+      if (lkWorking) return;
+      if (!navigator.geolocation) { lkSay('This browser cannot share its location. Please type your address instead.', true); $('lkAddr').focus(); return; }
+      lkBusy(true); lkSay('Getting your location… If your browser asks, please choose Allow.');
       navigator.geolocation.getCurrentPosition(
         p => { $('lkAddr').value = 'My current location'; showNearest(p.coords.latitude, p.coords.longitude, 'My current location'); },
-        () => { $('lkStatus').textContent = 'Location was blocked. Type your address instead.'; });
+        err => {
+          lkBusy(false);
+          lkSay(err.code === 1 ? 'Location access is blocked. Allow it with the padlock icon next to the web address, or type your address instead.'
+            : err.code === 3 ? 'Finding your location took too long. Try again, or type your address instead.'
+            : 'Your location is not available right now. Please type your address instead.', true);
+          $('lkAddr').focus();
+        }, { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 });
     };
     $('lkSave').onclick = () => {
-      if (!lkPos) { $('lkStatus').textContent = 'Search for a location first.'; return; }
-      try { localStorage.setItem('kk_owner_loc', JSON.stringify(lkPos)); $('lkStatus').textContent = 'Saved. This will open automatically next time.'; } catch (e) {}
+      if (!lkPos) { lkSay('Search for a location first, then press “Save as my location”.', true); return; }
+      try { localStorage.setItem('kk_owner_loc', JSON.stringify(lkPos)); lkSay('Saved. This location will open automatically next time.'); }
+      catch (e) { lkSay('Could not save the location in this browser.', true); }
     };
 
     const GSCOPE = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly';
@@ -2236,7 +2434,7 @@
     $('prFile').onchange = async e => {
       const f = e.target.files[0]; if (!f) return;
       prUp = true; prSay('Uploading image…');
-      try { prImg = await uploadImage(f); prShowImg(); prSay('Image uploaded ✓ It will be sent with the email.'); }
+      try { prImg = await uploadImage(f); prShowImg(); prSay('Image uploaded. It will be sent with the email.'); }
       catch (err) { prImg = ''; prShowImg(); prSay('Image upload failed: ' + err.message, true); }
       prUp = false;
     };
@@ -2373,27 +2571,6 @@
     $('sendBtn').onclick = sendReply;
     $('ci').onkeydown = e => { if (e.key === 'Enter') sendReply(); };
 
-    window.setStatus = async (id, status) => {
-      try {
-        const b = bookings.find(x => x.id === id);
-        const needsRefund = status === 'cancelled' && b && b.paymentStatus === 'paid' && !refunds.some(r => r.id === id);
-        if (needsRefund && !confirm('This booking has been paid. Cancelling it means the client is refunded in full. Continue?')) { render(); return; }
-        await db.collection(COL.bookings).doc(id).update({ status });
-        if (needsRefund) {
-          await db.collection(COL.refunds).doc(id).set({
-            appointmentId: id, userId: b.userId || '', userEmail: bWho(b), serviceName: bName(b),
-            appointmentDateText: bDate(b) + ' ' + bTime(b), total: Number(b.amountPaid ?? bPrice(b)), reason: 'ownerCancelled', note: '',
-            fee: 0, refundAmount: Number(b.amountPaid ?? bPrice(b)), status: 'approved',
-            adminReason: 'Your appointment was cancelled by the salon. You will receive a full refund.',
-            refundSent: false, createdAt: FV.serverTimestamp(), decidedAt: FV.serverTimestamp()
-          });
-        }
-        if (b && b.userId) {
-          const msg = `Your ${bName(b)} booking is now ${status}.`;
-          await db.collection(COL.notifications).add({ userId: b.userId, title: 'Booking ' + status, message: msg, body: msg, read: false, createdAt: FV.serverTimestamp() });
-        }
-      } catch (e) { alert(e.message); }
-    };
     window.delDoc = (col, id) => { if (confirm('Delete this item permanently?')) db.collection(col).doc(id).delete().catch(e => alert(e.message)); };
 
     // "1 hr 30 mins", "45 mins", "2 hours" -> minutes (defaults to 60)

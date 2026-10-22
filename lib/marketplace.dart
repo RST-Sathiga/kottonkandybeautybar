@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'client_chat_system.dart';
+import 'floating_bot_button.dart';
 import 'user_info.dart';
 import 'orders.dart';
 import 'loyalty.dart';
@@ -499,6 +500,70 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     _saveCart();
   }
 
+  static const int _maxQty = 99;
+
+  /// Change how many of a cart item the client wants (1 to 99). Use the bin to remove it.
+  void _changeQuantity(int index, int delta) {
+    if (index < 0 || index >= _cart.length) return;
+    final int current = (_cart[index]['quantity'] as num?)?.toInt() ?? 1;
+    final int next = (current + delta).clamp(1, _maxQty).toInt();
+    if (next == current) return;
+    setState(() => _cart[index]['quantity'] = next);
+    _saveCart();
+  }
+
+  Widget _qtyStepper(int index, VoidCallback refresh) {
+    final int qty = (_cart[index]['quantity'] as num?)?.toInt() ?? 1;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: 'Decrease quantity',
+            icon: const Icon(Icons.remove),
+            iconSize: 20,
+            color: primaryPurple,
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            onPressed: qty > 1
+                ? () {
+              _changeQuantity(index, -1);
+              refresh();
+            }
+                : null,
+          ),
+          Semantics(
+            label: 'Quantity $qty',
+            child: SizedBox(
+              width: 30,
+              child: Text(
+                '$qty',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Increase quantity',
+            icon: const Icon(Icons.add),
+            iconSize: 20,
+            color: primaryPurple,
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            onPressed: qty < _maxQty
+                ? () {
+              _changeQuantity(index, 1);
+              refresh();
+            }
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
   // ---- Cart is saved on the phone (per user) so it survives closing the app.
   // Only plain values are stored; the icon is rebuilt from the category.
   String get _cartKey => 'kk_cart_${_auth.currentUser?.uid ?? 'guest'}';
@@ -749,7 +814,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   // SERVICE DETAILS
   // ============================================================
 
-  void _showServiceDetails(Map<String, dynamic> service) {
+  /// [fromCart] opens a read-only view (full description and reviews) of an item in the cart.
+  void _showServiceDetails(Map<String, dynamic> service, {bool fromCart = false}) {
     final bool isNails =
         service['category'] == 'Nails' && service['isProduct'] == true;
     final String? imagePath = service['image'];
@@ -892,7 +958,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           ),
                         ],
                       ),
-                      if (isNails) ...[
+                      if (isNails && !fromCart) ...[
                         const SizedBox(height: 12),
                         CheckboxListTile(
                           title: const Text(
@@ -916,38 +982,25 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         ),
                       ],
                       const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () {
-                                Navigator.pop(context);
-                                final Map<String, dynamic> modifiedService = {
-                                  ...service,
-                                  'price': currentTotal,
-                                  'name': includeInstallation && isNails
-                                      ? '${service['name']} (+ Installation)'
-                                      : service['name'],
-                                };
-                                _addToCart(modifiedService);
-                              },
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: primaryPurple,
-                                side: const BorderSide(color: primaryPurple),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 15,
-                                ),
-                              ),
-                              child: const Text('ADD TO CART'),
+                      if (fromCart)
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: primaryPurple,
+                              side: const BorderSide(color: primaryPurple),
+                              padding: const EdgeInsets.symmetric(vertical: 15),
                             ),
+                            child: const Text('BACK TO CART'),
                           ),
-                          if (service['isProduct'] != true) ...[
-                            const SizedBox(width: 12),
+                        )
+                      else
+                        Row(
+                          children: [
                             Expanded(
-                              child: ElevatedButton(
-                                onPressed: _isLoading
-                                    ? null
-                                    : () {
+                              child: OutlinedButton(
+                                onPressed: () {
                                   Navigator.pop(context);
                                   final Map<String, dynamic> modifiedService = {
                                     ...service,
@@ -956,21 +1009,48 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                         ? '${service['name']} (+ Installation)'
                                         : service['name'],
                                   };
-                                  _bookAppointment(modifiedService);
+                                  _addToCart(modifiedService);
                                 },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: primaryPurple,
-                                  foregroundColor: Colors.white,
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: primaryPurple,
+                                  side: const BorderSide(color: primaryPurple),
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 15,
                                   ),
                                 ),
-                                child: const Text('BOOK NOW'),
+                                child: const Text('ADD TO CART'),
                               ),
                             ),
+                            if (service['isProduct'] != true) ...[
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: _isLoading
+                                      ? null
+                                      : () {
+                                    Navigator.pop(context);
+                                    final Map<String, dynamic> modifiedService = {
+                                      ...service,
+                                      'price': currentTotal,
+                                      'name': includeInstallation && isNails
+                                          ? '${service['name']} (+ Installation)'
+                                          : service['name'],
+                                    };
+                                    _bookAppointment(modifiedService);
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryPurple,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 15,
+                                    ),
+                                  ),
+                                  child: const Text('BOOK NOW'),
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
-                      ),
+                        ),
                     ],
                   ),
                 ),
@@ -2138,40 +2218,101 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       separatorBuilder: (context, index) => const Divider(),
                       itemBuilder: (context, index) {
                         final item = _cart[index];
-                        return ListTile(
-                          leading: Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: lightPurple,
-                              borderRadius: BorderRadius.circular(12),
-                              image: (item['image'] is String && (item['image'] as String).isNotEmpty)
-                                  ? DecorationImage(
-                                image: _img(item['image'] as String),
-                                fit: BoxFit.cover,
-                              )
-                                  : null,
-                            ),
-                            child: (item['image'] is String && (item['image'] as String).isNotEmpty)
-                                ? null
-                                : Icon(
-                              (item['icon'] as IconData?) ?? Icons.shopping_bag_outlined,
-                              color: primaryPurple,
-                            ),
-                          ),
-                          title: Text(
-                            item['name'],
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Text(
-                            'R${(item['price'] as num).toStringAsFixed(2)} × ${item['quantity']}',
-                          ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.red),
-                            onPressed: () {
-                              _removeFromCart(index);
-                              setModalState(() {});
-                            },
+                        final int qty = (item['quantity'] as num?)?.toInt() ?? 1;
+                        final double unit = (item['price'] as num).toDouble();
+                        final bool hasImage =
+                            item['image'] is String && (item['image'] as String).isNotEmpty;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Column(
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Tap the picture or name to read the full description and the reviews.
+                                  Expanded(
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(12),
+                                      onTap: () => _showServiceDetails(item, fromCart: true),
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            width: 56,
+                                            height: 56,
+                                            decoration: BoxDecoration(
+                                              color: lightPurple,
+                                              borderRadius: BorderRadius.circular(12),
+                                              image: hasImage
+                                                  ? DecorationImage(
+                                                image: _img(item['image'] as String),
+                                                fit: BoxFit.cover,
+                                              )
+                                                  : null,
+                                            ),
+                                            child: hasImage
+                                                ? null
+                                                : Icon(
+                                              (item['icon'] as IconData?) ?? Icons.shopping_bag_outlined,
+                                              color: primaryPurple,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  item['name'].toString(),
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  'R${unit.toStringAsFixed(2)} each',
+                                                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                const Text(
+                                                  'Tap for details and reviews',
+                                                  style: TextStyle(fontSize: 11, color: primaryPurple),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Remove from cart',
+                                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                    onPressed: () {
+                                      _removeFromCart(index);
+                                      setModalState(() {});
+                                    },
+                                  ),
+                                ],
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 68),
+                                child: Row(
+                                  children: [
+                                    _qtyStepper(index, () => setModalState(() {})),
+                                    const Spacer(),
+                                    Text(
+                                      'R${(unit * qty).toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: primaryPurple,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       },
@@ -2882,6 +3023,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     );
   }
 
+  /// Opens the chat (chatbot first, owner on request) from anywhere via the floating button.
+  void _openChat() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const ChatScreen(
+          salonId: 'kotton_kandy',
+          salonName: 'Kotton Kandy',
+        ),
+      ),
+    );
+  }
+
   // ============================================================
   // NAVIGATION ROUTER
   // ============================================================
@@ -2909,6 +3062,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _buildCurrentPage(),
+      // Floating chat button on Home and Profile. Hidden on Messages (already a chat)
+      // and on Bookings, where it could cover the booking and pay buttons.
+      floatingActionButton: (_selectedIndex == 0 || _selectedIndex == 3)
+          ? FloatingBotButton(onPressed: _openChat)
+          : null,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) {

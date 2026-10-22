@@ -72,10 +72,14 @@ class ServiceRatingChip extends StatelessWidget {
   final String serviceId;
   final String serviceName;
 
+  /// Shorter text (e.g. "4.5 (12)") for tight spaces such as service cards.
+  final bool compact;
+
   const ServiceRatingChip({
     super.key,
     required this.serviceId,
     required this.serviceName,
+    this.compact = false,
   });
 
   @override
@@ -97,8 +101,10 @@ class ServiceRatingChip extends StatelessWidget {
         final String label = snap.hasError
             ? 'Reviews'
             : (docs.isEmpty
-            ? 'No reviews yet · Be the first'
-            : '${avg.toStringAsFixed(1)} (${docs.length}) · Read reviews');
+            ? (compact ? 'No reviews yet' : 'No reviews yet · Be the first')
+            : (compact
+            ? '${avg.toStringAsFixed(1)} (${docs.length})'
+            : '${avg.toStringAsFixed(1)} (${docs.length}) · Read reviews'));
 
         return InkWell(
           borderRadius: BorderRadius.circular(8),
@@ -118,12 +124,17 @@ class ServiceRatingChip extends StatelessWidget {
               children: [
                 const Icon(Icons.star, size: 16, color: Colors.amber),
                 const SizedBox(width: 4),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    color: _purple,
-                    fontWeight: FontWeight.w600,
+                // Flexible lets the text wrap instead of overflowing the row.
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: _purple,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
