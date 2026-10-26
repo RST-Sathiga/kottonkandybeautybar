@@ -2415,7 +2415,8 @@
 
     const GSCOPE = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly';
     let gToken = null, gExpiry = 0, prStop = false, prBusy = false, prImg = '', prUp = false;
-    const gClient = () => { try { return localStorage.getItem('kk_gclient') || ''; } catch (e) { return ''; } };
+    const DEFAULT_GCLIENT = '942970293622-bj6b21o3oa7av51nl59dno94pm0sc3hr.apps.googleusercontent.com';
+    const gClient = () => { try { return localStorage.getItem('kk_gclient') || DEFAULT_GCLIENT; } catch (e) { return DEFAULT_GCLIENT; } };
     const promoRecipients = () => users
       .filter(u => u.prefs && u.prefs.promotions === true && u.prefs.email !== false && uEmail(u))
       .map(u => ({ id: u.id, email: uEmail(u), name: uFullName(u) }));
