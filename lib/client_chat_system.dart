@@ -19,6 +19,21 @@ SenderType senderTypeFromString(String? value) {
   return SenderType.client;
 }
 
+/// Message shown to clients when something goes wrong behind the scenes
+/// (Firebase, network, etc.). Never show raw error text to clients.
+const String kSystemDownMessage =
+    'Our chat is temporarily unavailable.\nPlease try again later.';
+
+/// Turns any error into something a normal person can understand.
+/// The real error is only printed to the debug console.
+String friendlyChatError(Object error) {
+  debugPrint('Chat error: $error');
+  if (error.toString().contains('must be signed in')) {
+    return 'Please sign in to use the chat.';
+  }
+  return kSystemDownMessage;
+}
+
 String senderTypeToString(SenderType type) {
   if (type == SenderType.salon) return 'salon';
   if (type == SenderType.bot) return 'bot';
@@ -85,6 +100,8 @@ class ChatSummary {
   final bool isBotSession;
   final bool awaitingSalon;
   final bool closed;
+  final String type; // 'bot' (assistant chat) or 'owner' (chat with the owner)
+  final bool suggestOwner;
 
   ChatSummary({
     required this.id,
@@ -100,6 +117,8 @@ class ChatSummary {
     this.isBotSession = true,
     this.awaitingSalon = false,
     this.closed = false,
+    this.type = '',
+    this.suggestOwner = false,
   });
 
   factory ChatSummary.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -120,6 +139,8 @@ class ChatSummary {
       isBotSession: data['isBotSession'] != false,
       awaitingSalon: data['awaitingSalon'] == true,
       closed: data['closed'] == true,
+      type: data['type']?.toString() ?? '',
+      suggestOwner: data['suggestOwner'] == true,
     );
   }
 }
@@ -137,14 +158,39 @@ class ChatService {
   CollectionReference<Map<String, dynamic>> get _chats =>
       _firestore.collection('chats');
 
+  /// Chat with the owner (this is where the owner's replies and unread counts live).
   String chatIdFor({
+    required String clientId,
+    required String salonId,
+  }) {
+    return ownerChatIdFor(clientId: clientId, salonId: salonId);
+  }
+
+  /// The assistant (chatbot) conversation. This keeps the ORIGINAL chat id,
+  /// so the client's existing messages still show. The owner never sees it.
+  String botChatIdFor({
     required String clientId,
     required String salonId,
   }) {
     return '${clientId}_$salonId';
   }
 
-  Future<String> getOrCreateChat({
+  /// The direct conversation with the owner (shown on the admin side).
+  String ownerChatIdFor({
+    required String clientId,
+    required String salonId,
+  }) {
+    return '${clientId}_${salonId}_owner';
+  }
+
+  String _clientNameFor(User user) {
+    return (user.displayName != null && user.displayName!.trim().isNotEmpty)
+        ? user.displayName!.trim()
+        : (user.email?.split('@').first ?? 'Client');
+  }
+
+  /// Finds (or starts) the assistant chat for this client and salon.
+  Future<String> getOrCreateBotChat({
     required String salonId,
     required String salonName,
   }) async {
@@ -155,21 +201,19 @@ class ChatService {
     }
 
     final String clientId = user.uid;
+    final String clientName = _clientNameFor(user);
 
-    final String clientName =
-    (user.displayName != null && user.displayName!.trim().isNotEmpty)
-        ? user.displayName!.trim()
-        : (user.email?.split('@').first ?? 'Client');
-
-    final String chatId = chatIdFor(clientId: clientId, salonId: salonId);
+    final String chatId = botChatIdFor(clientId: clientId, salonId: salonId);
     final DocumentReference<Map<String, dynamic>> docRef = _chats.doc(chatId);
     final DocumentSnapshot<Map<String, dynamic>> snapshot = await docRef.get();
 
-    final bool needsNewSession =
-        !snapshot.exists || snapshot.data()?['closed'] == true;
+    // Start a fresh bot session for a new chat, a closed chat, or an old chat
+    // that was handed to the owner (the owner now has their own separate chat).
+    final bool needsNewSession = !snapshot.exists ||
+        snapshot.data()?['closed'] == true ||
+        snapshot.data()?['isBotSession'] == false;
 
     if (needsNewSession) {
-      // New chat (or a previous one was closed): start a fresh bot session.
       await docRef.set({
         'clientId': clientId,
         'clientName': clientName,
@@ -182,11 +226,58 @@ class ChatService {
         'unreadForSalon': 0,
         'isBotSession': true,
         'awaitingSalon': false,
+        if (snapshot.data()?['suggestOwner'] == true) 'suggestOwner': false,
         'closed': false,
         'sessionStartedAt': FieldValue.serverTimestamp(),
         if (!snapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
       await _botSay(docRef, clientId, SupportBot.greeting, SupportBot.topics);
+    }
+
+    return chatId;
+  }
+
+  /// Kept so older code that calls getOrCreateChat still works (assistant chat).
+  Future<String> getOrCreateChat({
+    required String salonId,
+    required String salonName,
+  }) =>
+      getOrCreateBotChat(salonId: salonId, salonName: salonName);
+
+  /// Makes sure the direct chat with the owner exists. It stays hidden from the
+  /// owner until the client sends the first message.
+  Future<String> ensureOwnerChat({
+    required String salonId,
+    required String salonName,
+  }) async {
+    final User? user = _auth.currentUser;
+
+    if (user == null) {
+      throw Exception('You must be signed in to start a chat.');
+    }
+
+    final String chatId =
+    ownerChatIdFor(clientId: user.uid, salonId: salonId);
+    final DocumentReference<Map<String, dynamic>> docRef = _chats.doc(chatId);
+    final DocumentSnapshot<Map<String, dynamic>> snapshot = await docRef.get();
+
+    if (!snapshot.exists) {
+      await docRef.set({
+        'type': 'owner',
+        'clientId': user.uid,
+        'clientName': _clientNameFor(user),
+        'salonId': salonId,
+        'salonName': salonName,
+        'lastMessage': '',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderType': 'client',
+        'unreadForClient': 0,
+        'unreadForSalon': 0,
+        'isBotSession': false,
+        'awaitingSalon': false,
+        'closed': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
     }
 
     return chatId;
@@ -246,17 +337,24 @@ class ChatService {
     final bool isClient = senderType == SenderType.client;
     final WriteBatch batch = _firestore.batch();
 
-    // While the customer is still talking to the chatbot, the owner is not notified.
     final Map<String, dynamic> chatData = (await chatRef.get()).data() ?? {};
+    final bool isOwnerChat = chatData['type'] == 'owner';
     final bool wasClosed = chatData['closed'] == true;
-    // A closed chat starts a fresh chatbot session when the customer writes again.
-    final bool withBot = isClient && (wasClosed || chatData['isBotSession'] != false);
+    // The assistant chat always answers. The owner chat is never answered by the bot
+    // and notifies the owner.
+    final bool withBot = isClient && !isOwnerChat;
+    final bool notifyOwner = isClient && isOwnerChat;
+
     if (isClient && wasClosed) {
+      // A closed chat starts again when the customer writes again.
       await chatRef.set({
         'closed': false,
-        'isBotSession': true,
         'awaitingSalon': false,
-        'sessionStartedAt': FieldValue.serverTimestamp(),
+        if (chatData['suggestOwner'] == true) 'suggestOwner': false,
+        if (!isOwnerChat) ...{
+          'isBotSession': true,
+          'sessionStartedAt': FieldValue.serverTimestamp(),
+        },
       }, SetOptions(merge: true));
     }
 
@@ -276,7 +374,8 @@ class ChatService {
         'lastMessageTime': FieldValue.serverTimestamp(),
         'lastMessageSenderType': senderTypeToString(senderType),
         'unreadForSalon':
-        (isClient && !withBot) ? FieldValue.increment(1) : FieldValue.increment(0),
+        notifyOwner ? FieldValue.increment(1) : FieldValue.increment(0),
+        if (notifyOwner) 'awaitingSalon': true,
         'unreadForClient':
         isClient ? FieldValue.increment(0) : FieldValue.increment(1),
       },
@@ -290,7 +389,20 @@ class ChatService {
       if (withBot) {
         final BotReply reply = await SupportBot.generateResponse(trimmed);
         await _botSay(chatRef, user.uid, reply.text, reply.suggestions);
-        if (reply.escalate) await escalateToOwner(chatId);
+        if (reply.escalate) {
+          // The owner has their own chat now: point the client to the Owner tab.
+          await _botSay(
+            chatRef,
+            user.uid,
+            'You can message the owner directly in the Messages tab.',
+            const [],
+          );
+          try {
+            await chatRef.set({'suggestOwner': true}, SetOptions(merge: true));
+          } catch (e) {
+            debugPrint('Owner suggestion error: $e');
+          }
+        }
       }
     } else if (!isClient && senderType == SenderType.salon) {
       // The owner replied: no longer waiting.
@@ -322,27 +434,16 @@ class ChatService {
     }, SetOptions(merge: true));
   }
 
-  /// Hands the chat to the owner (live support).
-  Future<void> escalateToOwner(String chatId) async {
-    await _chats.doc(chatId).set({
-      'isBotSession': false,
-      'awaitingSalon': true,
-      'unreadForSalon': FieldValue.increment(1),
-      'escalatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-  }
-
-  /// Customer chooses to go back to the chatbot while waiting for the owner.
-  Future<void> backToBot(String chatId) async {
-    await _chats.doc(chatId).set({
-      'isBotSession': true,
-      'awaitingSalon': false,
-    }, SetOptions(merge: true));
+  /// Hides the "chat with the owner" nudge in the assistant chat.
+  Future<void> dismissOwnerSuggestion(String chatId) async {
+    await _chats.doc(chatId).set({'suggestOwner': false}, SetOptions(merge: true));
   }
 
   /// Ends the session. The transcript stays in Firestore (archived).
   Future<void> closeChat(String chatId) async {
-    await _chats.doc(chatId).set({
+    final DocumentReference<Map<String, dynamic>> ref = _chats.doc(chatId);
+    if (!(await ref.get()).exists) return;
+    await ref.set({
       'closed': true,
       'awaitingSalon': false,
       'closedAt': FieldValue.serverTimestamp(),
@@ -388,9 +489,19 @@ class ChatService {
 
 // ============================================================
 // CLIENT CHAT SCREEN
+// Two separate chats:
+//   1. ChatScreen          : Messages tab, direct chat with the salon owner.
+//   2. AssistantChatScreen : the chatbot (floating bot button). The owner is NOT notified.
 // ============================================================
 
-class ChatScreen extends StatefulWidget {
+const Color _primaryPurple = Color(0xFF6B3A82);
+const Color _lightPurple = Color(0xFFF3EAF6);
+
+const String _cloudinaryCloudName = 'nuqsuqyw';
+const String _cloudinaryUploadPreset = 'profile_uploads';
+
+/// Messages tab: the direct chat with the salon owner.
+class ChatScreen extends StatelessWidget {
   final String salonId;
   final String salonName;
 
@@ -401,21 +512,166 @@ class ChatScreen extends StatefulWidget {
   });
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  Widget build(BuildContext context) {
+    return _ConversationScreen(
+      isOwner: true,
+      salonId: salonId,
+      salonName: salonName,
+    );
+  }
 }
 
-class _ChatScreenState extends State<ChatScreen> {
-  static const Color primaryPurple = Color(0xFF6B3A82);
-  static const Color lightPurple = Color(0xFFF3EAF6);
+/// Chat assistant (the chatbot). Opened by the floating bot button.
+/// The owner is never notified about this chat.
+class AssistantChatScreen extends StatelessWidget {
+  final String salonId;
+  final String salonName;
 
-  static const String cloudinaryCloudName = 'nuqsuqyw';
-  static const String cloudinaryUploadPreset = 'profile_uploads';
+  const AssistantChatScreen({
+    super.key,
+    required this.salonId,
+    required this.salonName,
+  });
 
+  @override
+  Widget build(BuildContext context) {
+    return _ConversationScreen(
+      isOwner: false,
+      salonId: salonId,
+      salonName: salonName,
+    );
+  }
+}
+
+/// A single open conversation (Assistant or Owner).
+class _ConversationScreen extends StatefulWidget {
+  final bool isOwner;
+  final String salonId;
+  final String salonName;
+
+  const _ConversationScreen({
+    required this.isOwner,
+    required this.salonId,
+    required this.salonName,
+  });
+
+  @override
+  State<_ConversationScreen> createState() => _ConversationScreenState();
+}
+
+class _ConversationScreenState extends State<_ConversationScreen> {
+  final GlobalKey<_ChatPaneState> _paneKey = GlobalKey<_ChatPaneState>();
+
+  Future<String> _load() {
+    return widget.isOwner
+        ? ChatService.instance.ensureOwnerChat(
+      salonId: widget.salonId,
+      salonName: widget.salonName,
+    )
+        : ChatService.instance.getOrCreateBotChat(
+      salonId: widget.salonId,
+      salonName: widget.salonName,
+    );
+  }
+
+  void _goToOwner() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => _ConversationScreen(
+          isOwner: true,
+          salonId: widget.salonId,
+          salonName: widget.salonName,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF9F7FA),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        titleSpacing: 0,
+        title: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: _lightPurple,
+              child: Icon(
+                widget.isOwner ? Icons.support_agent : Icons.smart_toy_outlined,
+                color: _primaryPurple,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.isOwner ? 'Owner' : 'Assistant',
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  widget.salonName,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'end') _paneKey.currentState?.endChat();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'end', child: Text('End this chat')),
+            ],
+          ),
+        ],
+      ),
+      body: _ChatPane(
+        key: _paneKey,
+        isOwner: widget.isOwner,
+        active: true,
+        loadChatId: _load,
+        onOpenOwner: widget.isOwner ? null : _goToOwner,
+      ),
+    );
+  }
+}
+
+/// One conversation (either the Assistant or the Owner).
+class _ChatPane extends StatefulWidget {
+  final bool isOwner;
+  final bool active;
+  final Future<String> Function() loadChatId;
+  final VoidCallback? onOpenOwner;
+
+  const _ChatPane({
+    super.key,
+    required this.isOwner,
+    required this.active,
+    required this.loadChatId,
+    this.onOpenOwner,
+  });
+
+  @override
+  State<_ChatPane> createState() => _ChatPaneState();
+}
+
+class _ChatPaneState extends State<_ChatPane> {
   final ChatService _chatService = ChatService.instance;
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
   String? _chatId;
+  Stream<List<ChatMessage>>? _messages;
+  Stream<ChatSummary?>? _summary;
   bool _loading = true;
   bool _sending = false;
   bool _uploadingImage = false;
@@ -435,30 +691,43 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _init() async {
+    if (mounted && (_error != null || !_loading)) {
+      setState(() {
+        _error = null;
+        _loading = true;
+      });
+    }
     try {
-      final String chatId = await _chatService.getOrCreateChat(
-        salonId: widget.salonId,
-        salonName: widget.salonName,
-      );
+      final String chatId = await widget.loadChatId();
 
       if (!mounted) return;
 
       setState(() {
         _chatId = chatId;
+        _messages = _chatService.messagesStream(chatId);
+        _summary = _chatService.chatStream(chatId);
         _loading = false;
       });
-
-      await _chatService.markRead(
-        chatId: chatId,
-        readerType: SenderType.client,
-      );
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        _error = e.toString();
+        _error = friendlyChatError(e);
         _loading = false;
       });
+    }
+  }
+
+  /// Called from the menu: ends this conversation and leaves the screen.
+  Future<void> endChat() async {
+    try {
+      if (_chatId != null) {
+        await _chatService.closeChat(_chatId!);
+      }
+      if (mounted) Navigator.of(context).maybePop();
+    } catch (e) {
+      debugPrint('Chat end error: $e');
+      _showSnack('Something went wrong. Please try again later.');
     }
   }
 
@@ -479,7 +748,11 @@ class _ChatScreenState extends State<ChatScreen> {
         text: text,
       );
     } catch (e) {
-      _showSnack('Could not send message. Please try again.');
+      debugPrint('Chat send error: $e');
+      if (mounted && _messageController.text.isEmpty) {
+        _messageController.text = text;
+      }
+      _showSnack('Message not sent. Please try again later.');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -493,16 +766,18 @@ class _ChatScreenState extends State<ChatScreen> {
         senderType: SenderType.client,
         text: topic,
       );
-    } catch (_) {
-      _showSnack('Could not send message. Please try again.');
+    } catch (e) {
+      debugPrint('Chat topic error: $e');
+      _showSnack('Message not sent. Please try again later.');
     }
   }
 
   Future<String?> _uploadImageToCloudinary(File imageFile) async {
-    final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudinaryCloudName/image/upload');
+    final url = Uri.parse(
+        'https://api.cloudinary.com/v1_1/$_cloudinaryCloudName/image/upload');
 
     final request = http.MultipartRequest('POST', url)
-      ..fields['upload_preset'] = cloudinaryUploadPreset
+      ..fields['upload_preset'] = _cloudinaryUploadPreset
       ..files.add(await http.MultipartFile.fromPath('file', imageFile.path));
 
     final response = await request.send();
@@ -541,16 +816,18 @@ class _ChatScreenState extends State<ChatScreen> {
           imageUrl: url,
         );
       } else {
-        _showSnack('Could not send image. Upload failed.');
+        _showSnack('Image not sent. Please try again later.');
       }
     } catch (e) {
-      _showSnack('Could not send image. Please try again.');
+      debugPrint('Chat image error: $e');
+      _showSnack('Image not sent. Please try again later.');
     } finally {
       if (mounted) setState(() => _uploadingImage = false);
     }
   }
 
   void _showSnack(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
@@ -558,67 +835,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9F7FA),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        titleSpacing: 0,
-        title: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: lightPurple,
-              child: Text(
-                widget.salonName.isNotEmpty
-                    ? widget.salonName[0].toUpperCase()
-                    : 'S',
-                style: const TextStyle(
-                  color: primaryPurple,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              widget.salonName,
-              style: const TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: (v) async {
-              if (_chatId == null) return;
-              if (v == 'owner') {
-                await _chatService.sendMessage(
-                  chatId: _chatId!,
-                  senderType: SenderType.client,
-                  text: 'I would like to speak to the owner',
-                );
-              } else if (v == 'end') {
-                await _chatService.closeChat(_chatId!);
-                if (mounted) Navigator.of(context).maybePop();
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'owner', child: Text('Speak to the owner')),
-              PopupMenuItem(value: 'end', child: Text('End chat')),
-            ],
-          ),
-        ],
-      ),
-      body: _buildBody(),
-    );
+    return _buildBody();
   }
 
   Widget _buildBody() {
     if (_loading) {
       return const Center(
-        child: CircularProgressIndicator(color: primaryPurple),
+        child: CircularProgressIndicator(color: _primaryPurple),
       );
     }
 
@@ -626,10 +849,22 @@ class _ChatScreenState extends State<ChatScreen> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(30),
-          child: Text(
-            _error!,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey[700]),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_off, size: 60, color: Colors.grey[400]),
+              const SizedBox(height: 15),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey[700], fontSize: 16),
+              ),
+              const SizedBox(height: 15),
+              TextButton(
+                onPressed: _init,
+                child: const Text('Try again'),
+              ),
+            ],
           ),
         ),
       );
@@ -637,51 +872,90 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return Column(
       children: [
-        StreamBuilder<ChatSummary?>(
-          stream: _chatService.chatStream(_chatId!),
-          builder: (context, snap) {
-            final chat = snap.data;
-            if (chat == null || chat.closed || chat.isBotSession) {
-              return const SizedBox.shrink();
-            }
-            return Container(
-              width: double.infinity,
-              color: lightPurple,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              child: Row(
-                children: [
-                  const Icon(Icons.support_agent, size: 18, color: primaryPurple),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      chat.awaitingSalon
-                          ? 'You are chatting with the owner. She will reply here soon.'
-                          : 'You are chatting with the owner.',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => _chatService.backToBot(_chatId!),
-                    child: const Text('Back to chatbot', style: TextStyle(fontSize: 12)),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
+        _buildTopBanner(),
         Expanded(child: _buildMessageList()),
         _buildInputBar(),
       ],
     );
   }
 
+  Widget _buildTopBanner() {
+    return StreamBuilder<ChatSummary?>(
+      stream: _summary,
+      builder: (context, snap) {
+        final ChatSummary? chat = snap.data;
+        if (chat == null || chat.closed) return const SizedBox.shrink();
+
+        String? text;
+        Widget? action;
+
+        if (widget.isOwner) {
+          text = chat.awaitingSalon
+              ? 'Your message was sent. The owner will reply here soon.'
+              : null;
+        } else if (chat.suggestOwner) {
+          text = 'Need a real person? You can chat with the owner directly.';
+          action = TextButton(
+            onPressed: () {
+              if (_chatId != null) {
+                _chatService.dismissOwnerSuggestion(_chatId!).catchError((e) {
+                  debugPrint('Dismiss suggestion error: $e');
+                });
+              }
+              widget.onOpenOwner?.call();
+            },
+            child: const Text('Open Owner chat', style: TextStyle(fontSize: 12)),
+          );
+        }
+
+        if (text == null) return const SizedBox.shrink();
+
+        return Container(
+          width: double.infinity,
+          color: _lightPurple,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            children: [
+              const Icon(Icons.support_agent, size: 18, color: _primaryPurple),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(text, style: const TextStyle(fontSize: 12)),
+              ),
+              if (action != null) action,
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildMessageList() {
     return StreamBuilder<List<ChatMessage>>(
-      stream: _chatService.messagesStream(_chatId!),
+      stream: _messages,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
-            child: CircularProgressIndicator(color: primaryPurple),
+            child: CircularProgressIndicator(color: _primaryPurple),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(30),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.cloud_off, size: 60, color: Colors.grey[400]),
+                  const SizedBox(height: 15),
+                  Text(
+                    friendlyChatError(snapshot.error!),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey[700], fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
           );
         }
 
@@ -695,21 +969,25 @@ class _ChatScreenState extends State<ChatScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    Icons.chat_bubble_outline,
+                    widget.isOwner
+                        ? Icons.support_agent
+                        : Icons.chat_bubble_outline,
                     size: 70,
                     color: Colors.grey[400],
                   ),
                   const SizedBox(height: 15),
-                  const Text(
-                    'No messages yet',
-                    style: TextStyle(
+                  Text(
+                    widget.isOwner ? 'Chat with the owner' : 'No messages yet',
+                    style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Ask a question to start the conversation.',
+                    widget.isOwner
+                        ? 'Send a message and the owner will reply here.'
+                        : 'Ask a question to start the conversation.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.grey[600]),
                   ),
@@ -719,10 +997,14 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         }
 
-        _chatService.markRead(
-          chatId: _chatId!,
-          readerType: SenderType.client,
-        );
+        // Only mark messages as read while this chat is on screen.
+        if (widget.active && _chatId != null) {
+          _chatService
+              .markRead(chatId: _chatId!, readerType: SenderType.client)
+              .catchError((e) {
+            debugPrint('Mark read error: $e');
+          });
+        }
 
         return ListView.builder(
           controller: _scrollController,
@@ -749,7 +1031,7 @@ class _ChatScreenState extends State<ChatScreen> {
         margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: isMe ? primaryPurple : Colors.white,
+          color: isMe ? _primaryPurple : Colors.white,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
@@ -780,7 +1062,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       width: 180,
                       child: Center(
                         child: CircularProgressIndicator(
-                          color: primaryPurple,
+                          color: _primaryPurple,
                         ),
                       ),
                     );
@@ -790,10 +1072,22 @@ class _ChatScreenState extends State<ChatScreen> {
               if (message.text.isNotEmpty) const SizedBox(height: 6),
             ],
             if (message.senderType == SenderType.bot)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 4),
                 child: Text('Assistant',
-                    style: TextStyle(fontSize: 10, color: primaryPurple, fontWeight: FontWeight.bold)),
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: _primaryPurple,
+                        fontWeight: FontWeight.bold)),
+              ),
+            if (message.senderType == SenderType.salon)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Text('Owner',
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: _primaryPurple,
+                        fontWeight: FontWeight.bold)),
               ),
             if (message.text.isNotEmpty)
               Text(
@@ -811,7 +1105,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: message.suggestions
                     .map((s) => ActionChip(
                   label: Text(s, style: const TextStyle(fontSize: 12)),
-                  backgroundColor: lightPurple,
+                  backgroundColor: _lightPurple,
                   onPressed: () => _sendTopic(s),
                 ))
                     .toList(),
@@ -849,8 +1143,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   String _formatTime(DateTime date) {
-    final String hour = (date.hour % 12 == 0 ? 12 : date.hour % 12)
-        .toString();
+    final String hour =
+    (date.hour % 12 == 0 ? 12 : date.hour % 12).toString();
     final String minute = date.minute.toString().padLeft(2, '0');
     final String period = date.hour >= 12 ? 'PM' : 'AM';
     return '$hour:$minute $period';
@@ -880,16 +1174,16 @@ class _ChatScreenState extends State<ChatScreen> {
                 width: 18,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: primaryPurple,
+                  color: _primaryPurple,
                 ),
               )
-                  : const Icon(Icons.image_outlined, color: primaryPurple),
+                  : const Icon(Icons.image_outlined, color: _primaryPurple),
             ),
             Expanded(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
-                  color: lightPurple,
+                  color: _lightPurple,
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: TextField(
@@ -897,8 +1191,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   minLines: 1,
                   maxLines: 4,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    hintText: 'Ask a question...',
+                  decoration: InputDecoration(
+                    hintText: widget.isOwner
+                        ? 'Message the owner...'
+                        : 'Ask a question...',
                     border: InputBorder.none,
                   ),
                   onSubmitted: (_) => _sendMessage(),
@@ -908,7 +1204,7 @@ class _ChatScreenState extends State<ChatScreen> {
             const SizedBox(width: 8),
             Container(
               decoration: const BoxDecoration(
-                color: primaryPurple,
+                color: _primaryPurple,
                 shape: BoxShape.circle,
               ),
               child: IconButton(

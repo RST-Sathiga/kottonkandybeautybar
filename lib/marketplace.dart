@@ -3023,11 +3023,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     );
   }
 
-  /// Opens the chat (chatbot first, owner on request) from anywhere via the floating button.
+  /// Opens the chat assistant (chatbot) from anywhere via the floating button.
+  /// Messages with the owner live in the Messages tab.
   void _openChat() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const ChatScreen(
+        builder: (_) => const AssistantChatScreen(
           salonId: 'kotton_kandy',
           salonName: 'Kotton Kandy',
         ),
