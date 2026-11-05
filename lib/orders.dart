@@ -353,7 +353,7 @@ class _AppointmentsView extends StatelessWidget {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Center(child: Text("Error: ${snapshot.error}"));
+          return const Center(child: Text("We could not load your appointments right now. Please try again later."));
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -496,7 +496,7 @@ class _AppointmentsView extends StatelessWidget {
               return Padding(
                 padding: const EdgeInsets.all(12),
                 child: Text(
-                  'Could not display this item: $e',
+                  'Could not display this item.',
                   style: const TextStyle(color: Colors.red, fontSize: 12),
                 ),
               );
@@ -517,6 +517,148 @@ class _OrdersView extends StatelessWidget {
 
   const _OrdersView({required this.currentUser});
 
+  static const Set<String> _paidStates = {'paid', 'success'};
+
+  /// Cancel button (before the order ships) or the progress of a cancellation already requested.
+  List<Widget> _cancelSection(
+      BuildContext context,
+      String docId,
+      Map<String, dynamic> data,
+      String orderId,
+      int step,
+      double amountPaid,
+      List<dynamic> items,
+      Map<String, dynamic>? req,
+      ) {
+    if (req != null) {
+      final String reqStatus = (req['status'] ?? '').toString().toLowerCase();
+      final bool sent = req['refundSent'] == true;
+      final String money = 'R${amountPaid.toStringAsFixed(2)}';
+      String text;
+      Color color;
+      if (reqStatus == 'declined') {
+        final String why = (req['adminReason'] ?? '').toString();
+        text = 'Cancellation declined.${why.isEmpty ? '' : ' $why'}';
+        color = Colors.red.shade700;
+      } else if (reqStatus == 'approved') {
+        text = sent
+            ? 'Your refund of $money has been sent to your original payment method.'
+            : 'Cancellation approved. Your refund of $money is being processed (3-5 business days).';
+        color = Colors.green.shade700;
+      } else {
+        text = 'Cancellation requested. The salon is reviewing it, and your refund of $money follows once it is approved.';
+        color = Colors.orange.shade800;
+      }
+      return [
+        const Divider(height: 24),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, size: 18, color: color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(text, style: TextStyle(fontSize: 12.5, color: color, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        ),
+      ];
+    }
+
+    final String paymentStatus = _normStatus((data['paymentStatus'] ?? '').toString());
+    final bool canCancel = step == 0 && _paidStates.contains(paymentStatus);
+    if (!canCancel) return const [];
+
+    return [
+      const Divider(height: 24),
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () => _confirmCancel(context, docId, data, orderId, amountPaid, items),
+          icon: const Icon(Icons.cancel_outlined, size: 18),
+          label: const Text('CANCEL ORDER & REQUEST REFUND'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.red.shade700,
+            side: BorderSide(color: Colors.red.shade300),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+      ),
+    ];
+  }
+
+  Future<void> _confirmCancel(
+      BuildContext context,
+      String docId,
+      Map<String, dynamic> data,
+      String orderId,
+      double amountPaid,
+      List<dynamic> items,
+      ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final bool? yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel this order?'),
+        content: Text(
+          'You will be refunded R${amountPaid.toStringAsFixed(2)}, the amount you paid, to your '
+              'original payment method once the salon approves it (3-5 business days).\n\n'
+              'Orders that have already shipped cannot be cancelled. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep order'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Yes, cancel order', style: TextStyle(color: Colors.red.shade700)),
+          ),
+        ],
+      ),
+    );
+    if (yes != true) return;
+
+    final names = items
+        .map((e) => e is Map ? (e['name'] ?? e['title'] ?? '').toString() : '')
+        .where((n) => n.isNotEmpty)
+        .join(', ');
+    final short = orderId.substring(0, orderId.length > 8 ? 8 : orderId.length);
+
+    try {
+      // One refund request per order: its id is the order id.
+      await FirebaseFirestore.instance.collection('refund_requests').doc(docId).set({
+        'type': 'order',
+        'orderId': docId,
+        'userId': currentUser.uid,
+        'userEmail': currentUser.email ?? (data['userEmail'] ?? '').toString(),
+        'serviceName': names.isEmpty ? 'Order #$short' : 'Order #$short: $names',
+        'reason': 'orderCancelled',
+        'total': amountPaid,
+        'fee': 0,
+        'refundAmount': amountPaid,
+        'paymentReference': (data['paymentReference'] ?? '').toString(),
+        'status': 'pending',
+        'refundSent': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Cancellation requested. We will update you here.')),
+      );
+    } catch (e) {
+      debugPrint('Cancellation request failed: $e');
+      messenger.showSnackBar(const SnackBar(content: Text('Could not request the cancellation. Please try again.')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
@@ -526,7 +668,7 @@ class _OrdersView extends StatelessWidget {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Center(child: Text("Error loading orders: ${snapshot.error}"));
+          return const Center(child: Text("We could not load your orders right now. Please try again later."));
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -541,191 +683,275 @@ class _OrdersView extends StatelessWidget {
           );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: docs.length,
-          itemBuilder: (context, index) {
-            try {
-              final doc = docs[index];
-              final data = doc.data() as Map<String, dynamic>;
+        // The customer's refund requests, so each order can show its cancellation progress.
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('refund_requests')
+              .where('userId', isEqualTo: currentUser.uid)
+              .snapshots(),
+          builder: (context, reqSnap) {
+            final Map<String, Map<String, dynamic>> reqs = {
+              for (final d in (reqSnap.data?.docs ?? []))
+                (((d.data() as Map<String, dynamic>)['orderId']) ?? '').toString():
+                d.data() as Map<String, dynamic>,
+            };
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: docs.length,
+              itemBuilder: (context, index) {
+                try {
+                  final doc = docs[index];
+                  final data = doc.data() as Map<String, dynamic>;
 
-              final String orderId = (data['orderId'] ?? doc.id).toString();
-              final String rawStatus = (data['status'] ?? 'PENDING').toString();
-              final String statusUpper = rawStatus.toUpperCase();
-              final double totalAmount = _toDouble(data['totalAmount'] ?? data['price']);
-              final List<dynamic> items = data['items'] is List ? data['items'] as List<dynamic> : [];
-              final String customerEmail = (data['userEmail'] ?? currentUser.email ?? 'N/A').toString();
+                  final String orderId = (data['orderId'] ?? doc.id).toString();
+                  final String rawStatus = (data['status'] ?? 'PENDING').toString();
+                  final String statusUpper = rawStatus.toUpperCase();
+                  final double totalAmount = _toDouble(data['totalAmount'] ?? data['price']);
+                  final List<dynamic> items = data['items'] is List ? data['items'] as List<dynamic> : [];
+                  final String customerEmail = (data['userEmail'] ?? currentUser.email ?? 'N/A').toString();
 
-              final int step = _orderStep(rawStatus);
-              final bool collection = _normStatus(rawStatus) == 'ready_for_collection' ||
-                  (data['deliveryMethod'] ?? data['shippingMethod'] ?? '').toString().toLowerCase().contains('kiosk') ||
-                  (data['deliveryMethod'] ?? data['shippingMethod'] ?? '').toString().toLowerCase().contains('collect');
-              final String courier = (data['courier'] ?? 'The Courier Guy').toString();
-              final String trackingNumber = (data['trackingNumber'] ?? '').toString().trim();
-              final String trackingUrl = (data['trackingUrl'] ?? '').toString().trim();
-              final double creditUsed = _toDouble(data['creditUsed']);
-              final double amountPaid = data['amountPaid'] != null ? _toDouble(data['amountPaid']) : totalAmount;
+                  final int step = _orderStep(rawStatus);
+                  final bool collection = _normStatus(rawStatus) == 'ready_for_collection' ||
+                      (data['deliveryMethod'] ?? data['shippingMethod'] ?? '').toString().toLowerCase().contains('kiosk') ||
+                      (data['deliveryMethod'] ?? data['shippingMethod'] ?? '').toString().toLowerCase().contains('collect');
+                  final String courier = (data['courier'] ?? 'The Courier Guy').toString();
+                  final String trackingNumber = (data['trackingNumber'] ?? '').toString().trim();
+                  final String trackingUrl = (data['trackingUrl'] ?? '').toString().trim();
+                  final double creditUsed = _toDouble(data['creditUsed']);
+                  final double amountPaid = data['amountPaid'] != null ? _toDouble(data['amountPaid']) : totalAmount;
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey.shade200),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Order #${orderId.substring(0, orderId.length > 8 ? 8 : orderId.length)}",
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                "Customer: $customerEmail",
-                                style: const TextStyle(fontSize: 12, color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Chip(
-                          label: Text(
-                            _friendlyStatus(rawStatus).toUpperCase(),
-                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                          ),
-                          backgroundColor: _statusColor(step),
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.grey.shade200),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
                         ),
                       ],
                     ),
-                    const Divider(height: 20),
-                    if (step >= 0) ...[
-                      _OrderTracker(step: step, collection: collection),
-                      const SizedBox(height: 14),
-                      _TrackingInfo(
-                        step: step,
-                        courier: courier,
-                        trackingNumber: trackingNumber,
-                        trackingUrl: trackingUrl,
-                        collection: collection,
-                      ),
-                      const Divider(height: 24),
-                    ],
-                    if (items.isNotEmpty) ...[
-                      const Text(
-                        "Items Ordered",
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: OrdersScreen.primaryPurple),
-                      ),
-                      const SizedBox(height: 8),
-                      Table(
-                        columnWidths: const {
-                          0: FlexColumnWidth(3),
-                          1: FlexColumnWidth(1),
-                          2: FlexColumnWidth(2),
-                        },
-                        children: items.map((item) {
-                          final Map<String, dynamic> itemMap =
-                          item is Map ? Map<String, dynamic>.from(item) : <String, dynamic>{};
-                          final String name = (itemMap['name'] ?? itemMap['title'] ?? 'Product').toString();
-                          final int qty = _toInt(itemMap['quantity'] ?? itemMap['qty']);
-                          final double itemPrice = _toDouble(itemMap['price']);
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Order #${orderId.substring(0, orderId.length > 8 ? 8 : orderId.length)}",
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    "Customer: $customerEmail",
+                                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Chip(
+                              label: Text(
+                                _friendlyStatus(rawStatus).toUpperCase(),
+                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                              backgroundColor: _statusColor(step),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 20),
+                        if (step >= 0) ...[
+                          _OrderTracker(step: step, collection: collection),
+                          const SizedBox(height: 14),
+                          _TrackingInfo(
+                            step: step,
+                            courier: courier,
+                            trackingNumber: trackingNumber,
+                            trackingUrl: trackingUrl,
+                            collection: collection,
+                          ),
+                          const Divider(height: 24),
+                        ],
+                        _DeliverySummary(data: data),
+                        if (items.isNotEmpty) ...[
+                          const Text(
+                            "Items Ordered",
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: OrdersScreen.primaryPurple),
+                          ),
+                          const SizedBox(height: 8),
+                          Table(
+                            columnWidths: const {
+                              0: FlexColumnWidth(3),
+                              1: FlexColumnWidth(1),
+                              2: FlexColumnWidth(2),
+                            },
+                            children: items.map((item) {
+                              final Map<String, dynamic> itemMap =
+                              item is Map ? Map<String, dynamic>.from(item) : <String, dynamic>{};
+                              final String name = (itemMap['name'] ?? itemMap['title'] ?? 'Product').toString();
+                              final int qty = _toInt(itemMap['quantity'] ?? itemMap['qty']);
+                              final double itemPrice = _toDouble(itemMap['price']);
 
-                          return TableRow(
+                              return TableRow(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 4),
+                                    child: Text(name, style: const TextStyle(fontSize: 13)),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 4),
+                                    child: Text("x$qty", style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 4),
+                                    child: Text(
+                                      "R${(itemPrice * qty).toStringAsFixed(2)}",
+                                      textAlign: TextAlign.right,
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }).toList(),
+                          ),
+                          const Divider(height: 20),
+                        ] else ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4),
-                                child: Text(name, style: const TextStyle(fontSize: 13)),
+                              Text(
+                                (data['serviceName'] ?? data['productName'] ?? 'Product Order').toString(),
+                                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
                               ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4),
-                                child: Text("x$qty", style: const TextStyle(fontSize: 13, color: Colors.grey)),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4),
-                                child: Text(
-                                  "R${(itemPrice * qty).toStringAsFixed(2)}",
-                                  textAlign: TextAlign.right,
-                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                                ),
+                              Text(
+                                "R${totalAmount.toStringAsFixed(2)}",
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                               ),
                             ],
-                          );
-                        }).toList(),
-                      ),
-                      const Divider(height: 20),
-                    ] else ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            (data['serviceName'] ?? data['productName'] ?? 'Product Order').toString(),
-                            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
                           ),
-                          Text(
-                            "R${totalAmount.toStringAsFixed(2)}",
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
+                          const Divider(height: 20),
                         ],
-                      ),
-                      const Divider(height: 20),
-                    ],
-                    if (creditUsed > 0) ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text("Loyalty credit used", style: TextStyle(fontSize: 12, color: Colors.grey)),
-                          Text("-R${creditUsed.toStringAsFixed(2)}",
-                              style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                    ],
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          "Total Amount Paid",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                        ),
-                        Text(
-                          "R${amountPaid.toStringAsFixed(2)}",
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: OrdersScreen.primaryPurple,
+                        if (creditUsed > 0) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text("Loyalty credit used", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                              Text("-R${creditUsed.toStringAsFixed(2)}",
+                                  style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                            ],
                           ),
+                          const SizedBox(height: 6),
+                        ],
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "Total Amount Paid",
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            Text(
+                              "R${amountPaid.toStringAsFixed(2)}",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: OrdersScreen.primaryPurple,
+                              ),
+                            ),
+                          ],
                         ),
+                        ..._cancelSection(context, doc.id, data, orderId, step, amountPaid, items, reqs[doc.id]),
                       ],
                     ),
-                  ],
-                ),
-              );
-            } catch (e) {
-              return Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  'Could not display this item: $e',
-                  style: const TextStyle(color: Colors.red, fontSize: 12),
-                ),
-              );
-            }
+                  );
+                } catch (e) {
+                  return Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      'Could not display this item.',
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  );
+                }
+              },
+            );
           },
         );
       },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Where the order is going: the locker or the address the customer chose
+// ---------------------------------------------------------------------------
+
+class _DeliverySummary extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _DeliverySummary({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final Map<String, dynamic>? locker =
+    data['locker'] is Map ? Map<String, dynamic>.from(data['locker'] as Map) : null;
+    final Map<String, dynamic>? addr = data['deliveryAddressData'] is Map
+        ? Map<String, dynamic>.from(data['deliveryAddressData'] as Map)
+        : null;
+    final String method = (data['deliveryMethod'] ?? data['shippingMethod'] ?? '').toString();
+    final String fallback = (data['deliveryAddress'] ?? data['shippingAddress'] ?? '').toString();
+
+    final bool isLocker = data['deliveryType'] == 'locker' || locker != null;
+    final String title = isLocker ? 'Collect from locker' : 'Delivery address';
+
+    String line;
+    if (isLocker) {
+      line = [(locker?['name'] ?? '').toString(), (locker?['address'] ?? '').toString()]
+          .where((s) => s.isNotEmpty)
+          .join('\n');
+    } else {
+      line = (addr?['formatted'] ?? '').toString();
+    }
+    if (line.isEmpty) line = fallback;
+    if (line.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(isLocker ? Icons.inventory_2_outlined : Icons.home_outlined,
+                size: 20, color: OrdersScreen.primaryPurple),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: OrdersScreen.primaryPurple)),
+                  const SizedBox(height: 2),
+                  Text(line, style: const TextStyle(fontSize: 13)),
+                  if (method.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(method, style: const TextStyle(fontSize: 11.5, color: Colors.grey)),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const Divider(height: 24),
+      ],
     );
   }
 }

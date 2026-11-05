@@ -134,11 +134,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   void _listenToProducts() {
     _productsSub =
         _firestore.collection('products').snapshots().listen((snap) {
+          // Keep the built-in list until products exist in Firestore.
           _capturePromo(snap.docs);
           final docs = snap.docs.where((d) => d.data()['kind'] != 'promo').toList();
-
-          // 1. Map documents coming from Firestore
-          final remoteDocs = docs.map((d) {
+          if (docs.isEmpty) return;
+          final items = docs.map((d) {
             final data = d.data();
             final category = (data['category'] ?? 'Hair').toString();
             final url = (data['imageUrl'] ?? '').toString();
@@ -160,23 +160,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               if (deleteAt != null) 'deleteAt': deleteAt,
             };
           }).toList();
-
-          // 2. Start with local sample services so categories are always populated
-          final combined = List<Map<String, dynamic>>.from(_sampleServices);
-
-          // 3. Add remote items from Firestore
-          for (final item in remoteDocs) {
-            final index = combined.indexWhere((x) => x['id'] == item['id']);
-            if (index != -1) {
-              combined[index] = item; // Update local sample if it exists in Firestore
-            } else {
-              combined.add(item); // Add new remote item
-            }
-          }
-
-          if (mounted) {
-            setState(() => _remoteItems = combined);
-          }
+          if (mounted) setState(() => _remoteItems = items);
         }, onError: (_) {});
   }
 
@@ -194,100 +178,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   ];
 
   // ============================================================
-// SAMPLE SERVICES & PRODUCTS
-// ============================================================
+  // SAMPLE SERVICES
+  // ============================================================
 
   final List<Map<String, dynamic>> _sampleServices = [
-    // --- NAILS & PRESS-ONS ---
-    {
-      'id': 'gel_nails',
-      'name': 'Gel Nails',
-      'category': 'Nails',
-      'description': 'Beautiful long-lasting gel nail application.',
-      'price': 250.00,
-      'duration': '1 hr 30 min',
-      'icon': Icons.brush,
-    },
-    {
-      'id': 'press_on_plain',
-      'name': 'Press-on Plain',
-      'category': 'Nails',
-      'description': 'Clean, simple, solid-color press-on set application.',
-      'price': 250.00,
-      'duration': '45 mins',
-      'icon': Icons.back_hand,
-    },
-    {
-      'id': 'press_on_glam',
-      'name': 'Press-on Glam',
-      'category': 'Nails',
-      'description': 'Glamorous press-on set with intricate design elements.',
-      'price': 350.00,
-      'duration': '1 hr',
-      'icon': Icons.brush,
-    },
-    {
-      'id': 'press_on_installation',
-      'name': 'Press-on Installation',
-      'category': 'Nails',
-      'description': 'Professional sizing, prep, and long-lasting application.',
-      'price': 100.00,
-      'duration': '30 mins',
-      'icon': Icons.back_hand,
-    },
-    {
-      'id': 'french_tip_nails',
-      'name': 'Classic French Tip Press-Ons',
-      'category': 'Nails',
-      'description': 'Elegant and timeless French tip press-on nails with adhesive.',
-      'price': 150.00,
-      'duration': 'Product',
-      'isProduct': true,
-      'icon': Icons.back_hand,
-      'image': 'assets/images/nails.jpeg',
-    },
-    {
-      'id': 'matte_nude_nails',
-      'name': 'Matte Nude Press-On Nails',
-      'category': 'Nails',
-      'description': 'Sophisticated matte nude finish for everyday wear.',
-      'price': 130.00,
-      'duration': 'Product',
-      'isProduct': true,
-      'icon': Icons.back_hand,
-      'image': 'assets/images/matte_nails.jpeg',
-    },
-
-    // --- LASHES ---
-    {
-      'id': 'cluster_lashes',
-      'name': 'Cluster Lashes',
-      'category': 'Lashes',
-      'description': 'Full, beautiful cluster lash application.',
-      'price': 200.00,
-      'duration': '45 mins',
-      'icon': Icons.remove_red_eye,
-    },
-    {
-      'id': 'classic_lashes',
-      'name': 'Classic Lashes',
-      'category': 'Lashes',
-      'description': 'Natural-looking individual lash extensions.',
-      'price': 250.00,
-      'duration': '1 hr 30 mins',
-      'icon': Icons.remove_red_eye,
-    },
-    {
-      'id': 'volume_lashes',
-      'name': 'Volume Lashes',
-      'category': 'Lashes',
-      'description': 'Full and fluffy volume lash extensions.',
-      'price': 300.00,
-      'duration': '2 hrs',
-      'icon': Icons.remove_red_eye,
-    },
-
-    // --- HAIR ---
     {
       'id': 'hair_braiding',
       'name': 'Hair Braiding',
@@ -298,31 +192,40 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       'icon': Icons.content_cut,
     },
     {
-      'id': 'afro_crotchet',
-      'name': 'Afro Crotchet',
-      'category': 'Hair',
-      'description': 'Neat and lightweight Afro crotchet installation.',
-      'price': 350.00,
-      'duration': '2 hrs',
-      'icon': Icons.content_cut,
+      'id': 'gel_nails',
+      'name': 'Gel Nails',
+      'category': 'Nails',
+      'description': 'Beautiful long-lasting gel nail application.',
+      'price': 250.00,
+      'duration': '1 hr 30 min',
+      'icon': Icons.brush,
     },
     {
-      'id': 'knotless_braids',
-      'name': 'Knotless / Box Braids',
-      'category': 'Hair',
-      'description': 'Full head protective braiding.',
-      'price': 600.00,
-      'duration': '4 hrs',
-      'icon': Icons.content_cut,
-    },
-    {
-      'id': 'wig_installation',
-      'name': 'Wig Installation',
-      'category': 'Hair',
-      'description': 'Professional wig fitting, melting, and styling.',
-      'price': 400.00,
-      'duration': '1 hr 30 mins',
+      'id': 'makeup',
+      'name': 'Professional Makeup',
+      'category': 'Makeup',
+      'description': 'Professional makeup for events and special occasions.',
+      'price': 450.00,
+      'duration': '1 hr 30 min',
       'icon': Icons.face,
+    },
+    {
+      'id': 'lashes',
+      'name': 'Lash Extensions',
+      'category': 'Lashes',
+      'description': 'Enhance your look with beautiful lash extensions.',
+      'price': 300.00,
+      'duration': '1 hr',
+      'icon': Icons.remove_red_eye,
+    },
+    {
+      'id': 'facial',
+      'name': 'Luxury Facial',
+      'category': 'Skincare',
+      'description': 'Relaxing facial treatment for healthy glowing skin.',
+      'price': 400.00,
+      'duration': '1 hr',
+      'icon': Icons.spa,
     },
     {
       'id': 'hair_wash',
@@ -377,36 +280,27 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       'icon': Icons.sanitizer,
       'image': 'assets/images/protien_conditioner.jpeg',
     },
-
-    // --- MAKEUP ---
     {
-      'id': 'soft_glam',
-      'name': 'Soft Glam',
-      'category': 'Makeup',
-      'description': 'Seamless, radiant neutral glam makeup.',
-      'price': 400.00,
-      'duration': '1 hr',
-      'icon': Icons.face,
+      'id': 'french_tip_nails',
+      'name': 'Classic French Tip Press-Ons',
+      'category': 'Nails',
+      'description': 'Elegant and timeless French tip press-on nails with adhesive.',
+      'price': 150.00,
+      'duration': 'Product',
+      'isProduct': true,
+      'icon': Icons.back_hand,
+      'image': 'assets/images/nails.jpeg',
     },
     {
-      'id': 'full_glam',
-      'name': 'Full Glam',
-      'category': 'Makeup',
-      'description': 'Full coverage, dramatic eye look, cut crease, and lashes.',
-      'price': 500.00,
-      'duration': '1 hr 30 mins',
-      'icon': Icons.face,
-    },
-
-    // --- SKINCARE ---
-    {
-      'id': 'facial',
-      'name': 'Luxury Facial',
-      'category': 'Skincare',
-      'description': 'Relaxing facial treatment for healthy glowing skin.',
-      'price': 400.00,
-      'duration': '1 hr',
-      'icon': Icons.spa,
+      'id': 'matte_nude_nails',
+      'name': 'Matte Nude Press-On Nails',
+      'category': 'Nails',
+      'description': 'Sophisticated matte nude finish for everyday wear.',
+      'price': 130.00,
+      'duration': 'Product',
+      'isProduct': true,
+      'icon': Icons.back_hand,
+      'image': 'assets/images/matte_nails.jpeg',
     },
   ];
 
@@ -487,7 +381,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final DateTime now = DateTime.now();
 
     return (_remoteItems ?? _sampleServices).where((service) {
-      print('Selected: "$_selectedCategory" | Item Category: "${service['category']}"');
       final DateTime? deleteAt = service['deleteAt'] as DateTime?;
       if (deleteAt != null && !deleteAt.isAfter(now)) return false;
 
@@ -498,8 +391,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           name.contains(search) ||
           category.contains(search);
 
-      final bool matchesCategory = _selectedCategory == 'All' ||
-          service['category'].toString().trim().toLowerCase() == _selectedCategory.trim().toLowerCase();
+      final bool matchesCategory =
+          _selectedCategory == 'All' || service['category'] == _selectedCategory;
 
       final bool isProduct = service['isProduct'] == true;
       final bool matchesType = _typeFilter == 'All' ||
@@ -727,9 +620,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     try {
       await NotificationPrefsService().unregisterToken();
     } catch (_) {}
-
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('remember_me', false);
 
     await _auth.signOut();
     if (!mounted) return;
