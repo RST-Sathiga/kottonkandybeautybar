@@ -211,6 +211,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               if (saleOn) 'salePercent': salePct,
               'duration': data['duration'] ?? 'Product',
               if (data['isProduct'] == true) 'isProduct': true,
+              // Stock is set by the owner in the admin page. Missing = not tracked.
+              if (data['stock'] is num) 'stock': (data['stock'] as num).toInt(),
               'icon': _iconFor(category),
               if (image != null) 'image': image,
               if (deleteAt != null) 'deleteAt': deleteAt,
@@ -446,9 +448,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
     final int existingIndex = _cart.indexWhere((item) => item['id'] == id);
 
+    final int? stock = _stockOf(service);
+    if (stock != null && stock <= 0) {
+      _showMessage('${service['name']} is out of stock.');
+      return;
+    }
+
     if (existingIndex >= 0) {
-      _cart[existingIndex]['quantity'] =
-          (_cart[existingIndex]['quantity'] as int) + 1;
+      final int have = (_cart[existingIndex]['quantity'] as num).toInt();
+      if (stock != null && have >= stock) {
+        _showMessage('Only $stock of ${service['name']} in stock.');
+        return;
+      }
+      _cart[existingIndex]['quantity'] = have + 1;
     } else {
       _cart.add({
         ...service,
@@ -471,6 +483,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         final num fresh = i['price'] as num;
         if ((c['price'] as num?) != fresh) {
           c['price'] = fresh;
+          changed = true;
+        }
+        final int? freshStock = i['stock'] as int?;
+        if (c['stock'] != freshStock) {
+          if (freshStock == null) {
+            c.remove('stock');
+          } else {
+            c['stock'] = freshStock;
+          }
           changed = true;
         }
         break;
@@ -502,12 +523,58 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   static const int _maxQty = 99;
 
+  // ============================================================
+  // STOCK (set by the owner in the admin page)
+  // ============================================================
+  static const int _lowStock = 5; // keep in sync with LOW_STOCK in the admin page
+
+  /// null = this item does not track stock (services, or no stock set yet).
+  int? _stockOf(Map<String, dynamic> item) {
+    final v = item['stock'];
+    return v is num ? v.toInt() : null;
+  }
+
+  Color _stockColor(int stock) => stock <= 0
+      ? const Color(0xFFD32F2F)
+      : stock <= _lowStock
+      ? const Color(0xFFEF6C00)
+      : const Color(0xFF2E7D32);
+
+  /// Small coloured label: In stock (green), Only N left (orange), Out of stock (red).
+  Widget _stockLabel(Map<String, dynamic> item) {
+    final int? stock = _stockOf(item);
+    if (stock == null || item['isProduct'] != true) return const SizedBox.shrink();
+    final Color c = _stockColor(stock);
+    final String text = stock <= 0
+        ? 'Out of stock'
+        : stock <= _lowStock
+        ? 'Only $stock left'
+        : 'In stock';
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: c.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(text,
+          style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.bold)),
+    );
+  }
+
   /// Change how many of a cart item the client wants (1 to 99). Use the bin to remove it.
   void _changeQuantity(int index, int delta) {
     if (index < 0 || index >= _cart.length) return;
     final int current = (_cart[index]['quantity'] as num?)?.toInt() ?? 1;
-    final int next = (current + delta).clamp(1, _maxQty).toInt();
-    if (next == current) return;
+    final int? stock = _stockOf(_cart[index]);
+    final int cap = stock == null ? _maxQty : stock.clamp(1, _maxQty).toInt();
+    final int next = (current + delta).clamp(1, cap).toInt();
+    if (next == current) {
+      if (delta > 0 && stock != null && current >= stock) {
+        _showMessage('Only $stock in stock.');
+      }
+      return;
+    }
     setState(() => _cart[index]['quantity'] = next);
     _saveCart();
   }
@@ -1000,7 +1067,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           children: [
                             Expanded(
                               child: OutlinedButton(
-                                onPressed: () {
+                                onPressed: (_stockOf(service) ?? 1) <= 0
+                                    ? null
+                                    : () {
                                   Navigator.pop(context);
                                   final Map<String, dynamic> modifiedService = {
                                     ...service,
@@ -1018,7 +1087,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                     vertical: 15,
                                   ),
                                 ),
-                                child: const Text('ADD TO CART'),
+                                child: Text((_stockOf(service) ?? 1) <= 0
+                                    ? 'OUT OF STOCK'
+                                    : 'ADD TO CART'),
                               ),
                             ),
                             if (service['isProduct'] != true) ...[
@@ -1807,6 +1878,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
                   ),
+                  _stockLabel(service),
                   const SizedBox(height: 6),
                   Row(
                     children: [
@@ -1897,13 +1969,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   Widget _cartAddButton(Map<String, dynamic> service) {
+    final int? stock = _stockOf(service);
+    final bool out = stock != null && stock <= 0;
     return Container(
       decoration: BoxDecoration(
-        color: primaryPurple,
+        color: out ? Colors.grey.shade400 : primaryPurple,
         borderRadius: BorderRadius.circular(10),
       ),
       child: IconButton(
-        onPressed: () => _addToCart(service),
+        onPressed: out ? null : () => _addToCart(service),
         icon: const Icon(Icons.add, color: Colors.white),
       ),
     );
@@ -2077,6 +2151,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       _priceText(service, 16, end: true),
                     ],
                   ),
+                  _stockLabel(service),
                 ],
               ),
             ),
@@ -2400,6 +2475,29 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       return;
     }
 
+    // Re-check stock with a fresh read, so nobody pays for something just sold out.
+    try {
+      for (final c in List<Map<String, dynamic>>.from(_cart)) {
+        final doc = await _firestore.collection('products').doc(c['id'].toString()).get();
+        final sv = doc.data()?['stock'];
+        if (sv is! num) continue; // stock not tracked for this item
+        final int stock = sv.toInt();
+        final int qty = (c['quantity'] as num?)?.toInt() ?? 1;
+        if (stock <= 0) {
+          _showMessage('${c['name']} just sold out. Please remove it from your cart.');
+          return;
+        }
+        if (qty > stock) {
+          setState(() => c['quantity'] = stock);
+          await _saveCart();
+          _showMessage('Only $stock of ${c['name']} left. We updated your cart.');
+          return;
+        }
+      }
+    } catch (_) {
+      // If the check fails (offline), carry on; the owner is told about any shortfall.
+    }
+
     final List<Map<String, dynamic>> shippingOptions = [
       {
         'id': 'door_express',
@@ -2708,6 +2806,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 'items': _cart
                     .map((i) => <String, dynamic>{
                   'id': i['id']?.toString(),
+                  // The admin page / Cloud Function match stock by productId.
+                  'productId': i['id']?.toString(),
                   'name': (i['name'] ?? 'Product').toString(),
                   'category': i['category']?.toString(),
                   'price': (i['price'] as num?) ?? 0,

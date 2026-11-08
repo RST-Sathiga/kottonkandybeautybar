@@ -71,6 +71,57 @@ class _SupportScreenState extends State<SupportScreen> {
     },
   ];
 
+  Widget _helpCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String button,
+    required bool filled,
+    required VoidCallback onTap,
+  }) {
+    final Color fg = filled ? Colors.white : primaryPurple;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: filled ? primaryPurple : cardBg,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: fg, size: 36),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: TextStyle(
+                        color: filled ? Colors.white : Colors.black87,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16)),
+                const SizedBox(height: 2),
+                Text(subtitle,
+                    style: TextStyle(
+                        color: filled ? Colors.white70 : Colors.black54,
+                        fontSize: 12)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: filled ? Colors.white : primaryPurple,
+              foregroundColor: filled ? primaryPurple : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: onTap,
+            child: Text(button),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -91,47 +142,37 @@ class _SupportScreenState extends State<SupportScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         itemCount: _faqs.length + 2,
         itemBuilder: (context, index) {
-          // First item: chat with the assistant
+          // First item: two ways to get help. The assistant answers instantly;
+          // the owner chat goes straight to the salon (same chat as the Messages tab).
           if (index == 0) {
             return Container(
               margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: primaryPurple,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
+              child: Column(
                 children: [
-                  const Icon(Icons.support_agent, color: Colors.white, size: 36),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Need help?',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16),
+                  _helpCard(
+                    icon: Icons.smart_toy_outlined,
+                    title: 'Chat with our assistant',
+                    subtitle: 'Quick answers about orders, bookings, delivery and refunds, any time.',
+                    button: 'Ask assistant',
+                    filled: true,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AssistantChatScreen(
+                          salonId: 'kotton_kandy',
+                          salonName: 'Kotton Kandy',
                         ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Chat with our assistant, or ask to speak to the owner.',
-                          style: TextStyle(color: Colors.white70, fontSize: 12),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: primaryPurple,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () => Navigator.push(
+                  const SizedBox(height: 12),
+                  _helpCard(
+                    icon: Icons.support_agent,
+                    title: 'Message the owner',
+                    subtitle: 'Send a message to the salon. She replies in your Messages tab.',
+                    button: 'Message owner',
+                    filled: false,
+                    onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => const ChatScreen(
@@ -140,7 +181,6 @@ class _SupportScreenState extends State<SupportScreen> {
                         ),
                       ),
                     ),
-                    child: const Text('Chat now'),
                   ),
                 ],
               ),
