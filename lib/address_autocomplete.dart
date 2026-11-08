@@ -5,12 +5,10 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-import 'maps_config.dart';
-
 const Color _purple = Color(0xFF6B3A82);
 const Color _lightPurple = Color(0xFFF3EAF6);
 
-/// An address the customer picked from Google's suggestions.
+/// An address the customer picked from the address suggestions.
 class PickedAddress {
   final String formatted;
   final String street;
@@ -32,14 +30,14 @@ class PickedAddress {
 
   /// Plain values, safe to save in Firestore.
   Map<String, dynamic> toMap() => {
-        'formatted': formatted,
-        'street': street,
-        'city': city,
-        'postalCode': postalCode,
-        'placeId': placeId,
-        'latitude': latitude,
-        'longitude': longitude,
-      };
+    'formatted': formatted,
+    'street': street,
+    'city': city,
+    'postalCode': postalCode,
+    'placeId': placeId,
+    'latitude': latitude,
+    'longitude': longitude,
+  };
 }
 
 class PlaceSuggestion {
@@ -62,134 +60,106 @@ class PlacesException implements Exception {
   String toString() => message;
 }
 
-/// Talks to Google Places API (New): autocomplete + place details.
-/// One session token covers the typing and the final pick, which keeps billing low.
+/// Address search using Photon (OpenStreetMap data). Free: no API key, no billing.
+/// Photon returns the full address with each suggestion, so picking one needs no
+/// second request. Data (c) OpenStreetMap contributors.
 class PlacesService {
-  static const String _host = 'https://places.googleapis.com/v1';
-  String _session = _newSession();
+  static const String _host = 'https://photon.komoot.io/api/';
+  // South Africa (min lon, min lat, max lon, max lat). Keeps results local.
+  static const String _bbox = '16.3,-35.0,33.0,-22.0';
 
-  static String _newSession() {
-    final r = Random.secure();
-    final b = List<int>.generate(16, (_) => r.nextInt(256));
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    final h = b.map((x) => x.toRadixString(16).padLeft(2, '0')).join();
-    return '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-'
-        '${h.substring(16, 20)}-${h.substring(20)}';
-  }
+  // Suggestions from the latest search, so details(placeId) needs no network call.
+  final Map<String, PickedAddress> _cache = {};
 
-  Map<String, String> _headers({String? fieldMask}) => {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': MapsConfig.apiKey,
-        if (fieldMask != null) 'X-Goog-FieldMask': fieldMask,
-        ...MapsConfig.restrictionHeaders,
-      };
-
-  String _errorText(http.Response r) {
-    try {
-      final j = jsonDecode(r.body);
-      final msg = j['error']?['message'];
-      if (msg != null) return msg.toString();
-    } catch (_) {}
-    return 'Google returned error ${r.statusCode}.';
-  }
+  static String _s(dynamic v) => (v ?? '').toString().trim();
 
   Future<List<PlaceSuggestion>> autocomplete(
-    String input, {
-    double? nearLat,
-    double? nearLng,
-  }) async {
-    if (!MapsConfig.hasKey) {
-      throw PlacesException('Add your Google Maps API key in maps_config.dart.');
-    }
+      String input, {
+        double? nearLat,
+        double? nearLng,
+      }) async {
+    final uri = Uri.parse(_host).replace(queryParameters: {
+      'q': input,
+      'limit': '8',
+      'lang': 'en',
+      'bbox': _bbox,
+      if (nearLat != null && nearLng != null) 'lat': '$nearLat',
+      if (nearLat != null && nearLng != null) 'lon': '$nearLng',
+    });
     final res = await http
-        .post(
-          Uri.parse('$_host/places:autocomplete'),
-          headers: _headers(),
-          body: jsonEncode({
-            'input': input,
-            'sessionToken': _session,
-            'languageCode': 'en',
-            'includedRegionCodes': ['za'],
-            if (nearLat != null && nearLng != null)
-              'locationBias': {
-                'circle': {
-                  'center': {'latitude': nearLat, 'longitude': nearLng},
-                  'radius': 50000.0,
-                },
-              },
-          }),
-        )
+        .get(uri, headers: const {'Accept': 'application/json'})
         .timeout(const Duration(seconds: 15));
-    if (res.statusCode != 200) throw PlacesException(_errorText(res));
+    if (res.statusCode != 200) {
+      throw PlacesException('The address service returned error ${res.statusCode}.');
+    }
 
     final data = jsonDecode(res.body) as Map<String, dynamic>;
-    final list = (data['suggestions'] as List?) ?? [];
+    final features = (data['features'] as List?) ?? [];
     final out = <PlaceSuggestion>[];
-    for (final s in list) {
-      final p = s is Map ? s['placePrediction'] : null;
-      if (p is! Map) continue;
-      final id = (p['placeId'] ?? '').toString();
-      if (id.isEmpty) continue;
-      final String main =
-          (p['structuredFormat']?['mainText']?['text'] ?? p['text']?['text'] ?? '').toString();
-      final String secondary =
-          (p['structuredFormat']?['secondaryText']?['text'] ?? '').toString();
+    final seen = <String>{};
+    _cache.clear();
+
+    for (final f in features) {
+      if (f is! Map) continue;
+      final props = f['properties'];
+      final coords = f['geometry']?['coordinates'];
+      if (props is! Map || coords is! List || coords.length < 2) continue;
+      if (_s(props['countrycode']).toUpperCase() != 'ZA') continue;
+
+      final String houseNo = _s(props['housenumber']);
+      final String road = _s(props['street']);
+      final String name = _s(props['name']);
+      final String street = road.isNotEmpty
+          ? [houseNo, road].where((x) => x.isNotEmpty).join(' ')
+          : name;
+      final String suburb = _s(props['locality']).isNotEmpty
+          ? _s(props['locality'])
+          : _s(props['district']);
+      final String town = _s(props['city']).isNotEmpty ? _s(props['city']) : _s(props['county']);
+      final String state = _s(props['state']);
+      final String postal = _s(props['postcode']);
+      final String city = [suburb, town].where((x) => x.isNotEmpty).toSet().join(', ');
+
+      final String secondary = [suburb, town, state, postal]
+          .where((x) => x.isNotEmpty)
+          .toSet()
+          .join(', ');
+      final String main = street.isNotEmpty ? street : (secondary.isNotEmpty ? secondary : name);
+      if (main.isEmpty) continue;
+      final String formatted = [street, suburb, town, state, postal, 'South Africa']
+          .where((x) => x.isNotEmpty)
+          .toSet()
+          .join(', ');
+      if (!seen.add(formatted)) continue; // skip duplicates
+
+      final String id = 'osm_${_s(props['osm_type'])}${_s(props['osm_id'])}_${out.length}';
+      _cache[id] = PickedAddress(
+        formatted: formatted,
+        street: street,
+        city: city,
+        postalCode: postal,
+        placeId: id,
+        latitude: (coords[1] as num).toDouble(),
+        longitude: (coords[0] as num).toDouble(),
+      );
       out.add(PlaceSuggestion(placeId: id, mainText: main, secondaryText: secondary));
     }
     return out;
   }
 
   Future<PickedAddress> details(String placeId) async {
-    final uri = Uri.parse('$_host/places/$placeId').replace(
-      queryParameters: {'sessionToken': _session, 'languageCode': 'en'},
-    );
-    final res = await http
-        .get(uri, headers: _headers(fieldMask: 'formattedAddress,location,addressComponents'))
-        .timeout(const Duration(seconds: 15));
-    if (res.statusCode != 200) throw PlacesException(_errorText(res));
-    _session = _newSession(); // the session ends when details are fetched
-
-    final j = jsonDecode(res.body) as Map<String, dynamic>;
-    final comps = (j['addressComponents'] as List?) ?? [];
-
-    String comp(List<String> types) {
-      for (final type in types) {
-        for (final c in comps) {
-          if (c is! Map) continue;
-          final t = (c['types'] as List?)?.map((e) => e.toString()).toList() ?? [];
-          if (t.contains(type)) return (c['longText'] ?? '').toString();
-        }
-      }
-      return '';
-    }
-
-    final street = [comp(['street_number']), comp(['route'])]
-        .where((s) => s.isNotEmpty)
-        .join(' ');
-    final suburb = comp(['sublocality_level_1', 'sublocality', 'neighborhood']);
-    final town = comp(['locality', 'administrative_area_level_2']);
-    final city = [suburb, town].where((s) => s.isNotEmpty).toSet().join(', ');
-    final loc = j['location'];
-
-    return PickedAddress(
-      formatted: (j['formattedAddress'] ?? '').toString(),
-      street: street,
-      city: city,
-      postalCode: comp(['postal_code']),
-      placeId: placeId,
-      latitude: ((loc?['latitude'] ?? 0) as num).toDouble(),
-      longitude: ((loc?['longitude'] ?? 0) as num).toDouble(),
-    );
+    final a = _cache[placeId];
+    if (a == null) throw PlacesException('Please search again and pick your address.');
+    return a;
   }
 }
 
 /// Opens the address search. Returns the address the customer picked, or null.
 Future<PickedAddress?> showAddressSearch(
-  BuildContext context, {
-  double? nearLat,
-  double? nearLng,
-}) {
+    BuildContext context, {
+      double? nearLat,
+      double? nearLng,
+    }) {
   return showModalBottomSheet<PickedAddress>(
     context: context,
     isScrollControlled: true,
@@ -217,6 +187,15 @@ class _AddressSearchSheetState extends State<_AddressSearchSheet> {
   bool _searching = false;
   bool _picking = false;
   String? _error;
+
+  /// Turns a raw error into a short reason.
+  String _friendly(Object e) {
+    final l = e.toString().toLowerCase();
+    if (l.contains('socket') || l.contains('timeout') || l.contains('failed host lookup')) {
+      return 'No internet connection to the address service.';
+    }
+    return e.toString();
+  }
 
   @override
   void dispose() {
@@ -259,7 +238,7 @@ class _AddressSearchSheetState extends State<_AddressSearchSheet> {
       if (!mounted || id != _searchId) return;
       setState(() {
         debugPrint('Address search error: $e');
-        _error = 'Address search is not available right now. Please type your address in the fields instead.';
+        _error = 'Address search is not available right now. Please type your address in the fields instead.\n(${_friendly(e)})';
         _searching = false;
       });
     }
@@ -279,7 +258,7 @@ class _AddressSearchSheetState extends State<_AddressSearchSheet> {
       setState(() {
         _picking = false;
         debugPrint('Address search error: $e');
-        _error = 'Address search is not available right now. Please type your address in the fields instead.';
+        _error = 'Address search is not available right now. Please type your address in the fields instead.\n(${_friendly(e)})';
       });
     }
   }
@@ -323,22 +302,22 @@ class _AddressSearchSheetState extends State<_AddressSearchSheet> {
                 prefixIcon: const Icon(Icons.search, color: _purple),
                 suffixIcon: _searching
                     ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: _purple),
-                        ),
-                      )
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: _purple),
+                  ),
+                )
                     : (_controller.text.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _controller.clear();
-                              _onChanged('');
-                            },
-                          )),
+                    ? null
+                    : IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _controller.clear();
+                    _onChanged('');
+                  },
+                )),
                 filled: true,
                 fillColor: Colors.grey[100],
                 border: OutlineInputBorder(
@@ -357,37 +336,37 @@ class _AddressSearchSheetState extends State<_AddressSearchSheet> {
               child: _picking
                   ? const Center(child: CircularProgressIndicator(color: _purple))
                   : (_results.isEmpty
-                      ? Center(
-                          child: Text(
-                            _controller.text.trim().length < 3
-                                ? 'Type at least 3 characters.'
-                                : (_searching ? '' : 'No matching addresses.'),
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
-                        )
-                      : ListView.separated(
-                          itemCount: _results.length,
-                          separatorBuilder: (_, _) => const Divider(height: 1),
-                          itemBuilder: (context, i) {
-                            final s = _results[i];
-                            return ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: const CircleAvatar(
-                                backgroundColor: _lightPurple,
-                                child: Icon(Icons.place_outlined, color: _purple),
-                              ),
-                              title: Text(s.mainText,
-                                  style: const TextStyle(fontWeight: FontWeight.w600)),
-                              subtitle: s.secondaryText.isEmpty ? null : Text(s.secondaryText),
-                              onTap: () => _pick(s),
-                            );
-                          },
-                        )),
+                  ? Center(
+                child: Text(
+                  _controller.text.trim().length < 3
+                      ? 'Type at least 3 characters.'
+                      : (_searching ? '' : 'No matching addresses.'),
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              )
+                  : ListView.separated(
+                itemCount: _results.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, i) {
+                  final s = _results[i];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const CircleAvatar(
+                      backgroundColor: _lightPurple,
+                      child: Icon(Icons.place_outlined, color: _purple),
+                    ),
+                    title: Text(s.mainText,
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: s.secondaryText.isEmpty ? null : Text(s.secondaryText),
+                    onTap: () => _pick(s),
+                  );
+                },
+              )),
             ),
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Center(
-                child: Text('Powered by Google',
+                child: Text('Address data \u00a9 OpenStreetMap contributors',
                     style: TextStyle(fontSize: 11, color: Colors.grey[500])),
               ),
             ),

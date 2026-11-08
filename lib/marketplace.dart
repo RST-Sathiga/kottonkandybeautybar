@@ -2529,6 +2529,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     KioskLocation? chosenKiosk;
     PickedAddress? pickedAddress; // set when the customer picks a Google suggestion
 
+    // The address used on the customer's last delivery order (saved after each order).
+    Map<String, dynamic>? savedAddress;
+    try {
+      final udoc = await _firestore.collection('users').doc(user.uid).get();
+      final sa = udoc.data()?['savedAddress'];
+      if (sa is Map && (sa['street'] ?? '').toString().trim().isNotEmpty) {
+        savedAddress = Map<String, dynamic>.from(sa);
+      }
+    } catch (_) {
+      // no saved address available; the customer can still type or search
+    }
+
     // STEP 1: DELIVERY SELECTION DIALOG
     final bool? deliveryConfirmed = await showDialog<bool>(
       context: context,
@@ -2568,6 +2580,26 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     if (selectedShipping['type'] == 'door') ...[
                       const Text('Delivery Address:', style: TextStyle(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
+                      if (savedAddress != null) ...[
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.bookmark_outline, color: primaryPurple),
+                          label: Text(
+                            'Use saved address: ${savedAddress!['formatted'] ?? savedAddress!['street']}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: primaryPurple),
+                          ),
+                          onPressed: () {
+                            setModalState(() {
+                              pickedAddress = null;
+                              streetController.text = (savedAddress!['street'] ?? '').toString();
+                              cityController.text = (savedAddress!['city'] ?? '').toString();
+                              postalCodeController.text = (savedAddress!['postalCode'] ?? '').toString();
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                       OutlinedButton.icon(
                         icon: const Icon(Icons.search, color: primaryPurple),
                         label: Text(
@@ -2846,6 +2878,21 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               return;
             }
 
+            // Remember the delivery address for next time (door delivery only).
+            if (selectedShipping['type'] != 'kiosk' &&
+                streetController.text.trim().isNotEmpty) {
+              try {
+                await _firestore.collection('users').doc(user.uid).set({
+                  'savedAddress': {
+                    'street': streetController.text.trim(),
+                    'city': cityController.text.trim(),
+                    'postalCode': postalCodeController.text.trim(),
+                    'formatted': addressDetails,
+                  },
+                }, SetOptions(merge: true));
+              } catch (_) {}
+            }
+
             await CreditHelper.spendCredit(amount: creditUsed, refId: currentOrderId);
             await _awardPurchasePoints(currentOrderId);
 
@@ -2858,14 +2905,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             final NavigatorState navigator = Navigator.of(context);
             await showDialog(
               context: context,
-              barrierDismissible: false,
+              barrierDismissible: true, // tap outside, or use the X, to just close it
               builder: (dialogContext) => AlertDialog(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                title: const Row(
+                title: Row(
                   children: [
-                    Icon(Icons.check_circle, color: Colors.green),
-                    SizedBox(width: 8),
-                    Text('Order Confirmed!'),
+                    const Icon(Icons.check_circle, color: Colors.green),
+                    const SizedBox(width: 8),
+                    const Expanded(child: Text('Order Confirmed!')),
+                    IconButton(
+                      tooltip: 'Close',
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(dialogContext),
+                    ),
                   ],
                 ),
                 content: Column(
@@ -2880,6 +2932,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   ],
                 ),
                 actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('CLOSE', style: TextStyle(color: primaryPurple)),
+                  ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: primaryPurple, foregroundColor: Colors.white),
                     onPressed: () {
