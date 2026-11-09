@@ -51,6 +51,7 @@ class ChatMessage {
   final DateTime timestamp;
   final bool read;
   final List<String> suggestions;
+  final bool editedByAdmin; // the owner improved this assistant answer
 
   ChatMessage({
     required this.id,
@@ -61,6 +62,7 @@ class ChatMessage {
     required this.read,
     this.imageUrl,
     this.suggestions = const [],
+    this.editedByAdmin = false,
   });
 
   factory ChatMessage.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -78,6 +80,7 @@ class ChatMessage {
       suggestions: (data['suggestions'] is List)
           ? (data['suggestions'] as List).map((e) => e.toString()).toList()
           : const [],
+      editedByAdmin: data['editedByAdmin'] == true,
     );
   }
 }
@@ -214,12 +217,13 @@ class ChatService {
         snapshot.data()?['isBotSession'] == false;
 
     if (needsNewSession) {
+      final String greetingText = await SupportBot.greetingFor();
       await docRef.set({
         'clientId': clientId,
         'clientName': clientName,
         'salonId': salonId,
         'salonName': salonName,
-        'lastMessage': SupportBot.greeting,
+        'lastMessage': greetingText,
         'lastMessageTime': FieldValue.serverTimestamp(),
         'lastMessageSenderType': 'bot',
         'unreadForClient': 0,
@@ -231,7 +235,7 @@ class ChatService {
         'sessionStartedAt': FieldValue.serverTimestamp(),
         if (!snapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-      await _botSay(docRef, clientId, SupportBot.greeting, SupportBot.topics);
+      await _botSay(docRef, clientId, greetingText, SupportBot.topics);
     }
 
     return chatId;
@@ -1072,10 +1076,11 @@ class _ChatPaneState extends State<_ChatPane> {
               if (message.text.isNotEmpty) const SizedBox(height: 6),
             ],
             if (message.senderType == SenderType.bot)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 4),
-                child: Text('Assistant',
-                    style: TextStyle(
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                    message.editedByAdmin ? 'Assistant \u00b7 improved by Kotton Kandy' : 'Assistant',
+                    style: const TextStyle(
                         fontSize: 10,
                         color: _primaryPurple,
                         fontWeight: FontWeight.bold)),

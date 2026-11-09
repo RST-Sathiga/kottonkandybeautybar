@@ -227,6 +227,25 @@
         .lkact button{padding:8px 14px;font-size:13px}
         .lki.on{border-width:2px}
         #lockers button:focus-visible,#lockers input:focus-visible,#lockers a:focus-visible{outline:3px solid var(--pk);outline-offset:2px}
+
+        /* INVENTORY */
+        .stat.s-ok{border-left-color:#43a047}.stat.s-low{border-left-color:#fb8c00}.stat.s-out{border-left-color:#e53935}.stat.s-none{border-left-color:#9e9e9e}
+        .stat.s-ok b{color:#2e7d32}.stat.s-low b{color:#ef6c00}.stat.s-out b{color:#c62828}
+        .stk-pill{display:inline-block;padding:3px 12px;border-radius:12px;font-size:12px;font-weight:700;white-space:nowrap}
+        .stk-ok{background:#c8e6c9;color:#1b5e20}.stk-low{background:#ffe0b2;color:#7a4a00}.stk-out{background:#ffcdd2;color:#b71c1c}.stk-none{background:#e0e0e0;color:#555}
+        .inv-row{display:grid;grid-template-columns:56px minmax(150px,1fr) 190px auto;gap:14px;align-items:center;padding:12px 14px;margin-bottom:10px;background:var(--card);border-radius:14px;border-left:6px solid #9e9e9e;box-shadow:0 2px 10px #0001}
+        .inv-row.ok{border-left-color:#43a047}
+        .inv-row.low{border-left-color:#fb8c00}
+        .inv-row.out{border-left-color:#e53935}
+        .inv-cat{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mu);margin:18px 2px 8px}.inv-cat small{font-weight:400;margin-left:4px}
+        .inv-img{width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--bd);display:flex;align-items:center;justify-content:center;font-size:24px}
+        .inv-qty{font-size:26px;font-weight:700;line-height:1;margin-bottom:6px}
+        .inv-row.ok .inv-qty{color:#2e7d32}.inv-row.low .inv-qty{color:#ef6c00}.inv-row.out .inv-qty{color:#c62828}.inv-row.none .inv-qty{color:var(--mu)}
+        .inv-bar{height:7px;background:var(--bd);border-radius:6px;overflow:hidden;margin-top:6px}.inv-bar i{display:block;height:100%;border-radius:6px}
+        .inv-row.ok .inv-bar i{background:#43a047}.inv-row.low .inv-bar i{background:#fb8c00}.inv-row.out .inv-bar i{background:#e53935}
+        .inv-ctl{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.inv-ctl input{width:84px;margin:0;padding:8px 10px}.inv-ctl button{padding:8px 12px;font-size:13px}
+        @media(max-width:900px){.inv-row{grid-template-columns:56px 1fr}.inv-row .inv-ctl{grid-column:1/-1}}
+        .m-edit{color:var(--p);font-weight:600;cursor:pointer}.m-edit:hover{text-decoration:underline}.m-ed{font-style:italic}
         @media(max-width:700px){.lk{grid-template-columns:1fr;height:auto}#lkMap{height:50vh}}
         @media(max-width:700px){nav .grp{width:100%;margin:8px 4px 0}nav .grp:empty{display:none}#app{flex-direction:column;height:auto;overflow:visible}main{height:auto;overflow:visible}nav{height:auto;overflow:visible;width:100%;flex-direction:row;flex-wrap:wrap;padding:10px}nav h2{width:100%;margin:0 4px 6px}nav .out{margin:0 0 0 auto}.chat{grid-template-columns:1fr;height:auto}.clist{max-height:200px}.cview{height:60vh}}
         .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
@@ -333,9 +352,11 @@
         <a data-t="lockers">Lockers</a>
         <a data-t="refunds">Refunds<span class="badge hide" id="refundBadge"></span></a>
         <a data-t="products">Products</a>
+        <a data-t="inventory">Inventory<span class="badge hide" id="stockBadge"></span></a>
         <div class="grp">Customers</div>
         <a data-t="users">Users</a>
         <a data-t="messages">Messages</a>
+        <a data-t="botanswers">Chatbot</a>
         <a data-t="reviews">Reviews<span class="badge hide" id="reviewBadge"></span></a>
         <a data-t="issues">Reports<span class="badge hide" id="issueBadge"></span></a>
         <div class="grp">Marketing</div>
@@ -343,7 +364,7 @@
         <a data-t="weekly">Banner &amp; Promo</a>
         <a data-t="loyalty">Loyalty QR</a>
         <div class="grp"></div>
-        <a id="alertToggle">🔔 Alerts: off</a>
+        <a id="alertToggle"> Alerts: off</a>
         <a class="out" id="logout">Sign out</a>
     </nav>
     <main>
@@ -397,6 +418,7 @@
 
         <section id="messages" class="hide">
             <h3>Messages</h3>
+            <label class="chk" style="margin:-8px 0 14px"><input type="checkbox" id="showBotChats"> Also show clients' chatbot-only conversations (so you can review and improve the chatbot's answers)</label>
             <div class="chat">
                 <div class="clist" id="clist"></div>
                 <div class="cview">
@@ -486,6 +508,10 @@
                             <button class="sec" id="lkGps" type="button">Use my current location</button>
                             <button class="ghost" id="lkSave" type="button">Save as my location</button>
                         </div>
+                        <div class="lkbar hide" id="lkSavedBar" style="margin-top:8px">
+                            <button class="sec" id="lkUseSaved" type="button">Use my saved location</button>
+                            <button class="ghost" id="lkForget" type="button">Forget it</button>
+                        </div>
                     </div>
                     <div class="lkmsg" id="lkStatus" role="status" aria-live="polite">Type your address or press “Use my current location” to find the nearest lockers.</div>
                     <div class="lkhelp hide" id="lkHelp"></div>
@@ -567,6 +593,7 @@
                     <input id="pdu" placeholder="Duration, e.g. 1 hr 30 mins (services only)">
                     <input id="pf" type="file" accept="image/*" title="Product image from your device">
                     <input id="pd" placeholder="Description">
+                    <input id="ps" type="number" min="0" step="1" placeholder="Stock quantity (products only)">
                 </div>
                 <button class="sec" id="addProd">Add</button>
                 <button id="seedBtn" style="margin-left:8px">Import the app's products &amp; services</button>
@@ -575,6 +602,33 @@
             </div>
             <div class="tabs" id="prodTabs"></div>
             <div class="bgrid" id="prodTable"></div>
+        </section>
+        <section id="inventory" class="hide">
+            <h3>Inventory</h3>
+            <p class="sub">Stock for your products (services are not tracked). When a paid order comes in, the stock goes down by itself, and goes back up if the order is cancelled. Clients see the stock level in the app. <b style="color:#ef6c00">Orange</b> = running low (5 or fewer), <b style="color:#c62828">red</b> = out of stock, <b style="color:#2e7d32">green</b> = healthy.</p>
+            <div class="stats" id="invStats"></div>
+            <div class="card fbar">
+                <div class="chips" id="invChips"></div>
+                <div class="fsub"><input id="invSearch" type="search" placeholder="Search products…" autocomplete="off"></div>
+                <div class="fmeta"><span id="invCount"></span></div>
+            </div>
+            <div id="invList"></div>
+        </section>
+        <section id="botanswers" class="hide">
+            <h3>Chatbot answers</h3>
+            <p class="sub">Answers you have approved for the chatbot. Add one here, or open a conversation in Messages and press <b>Edit answer</b> under any chatbot reply. The app uses this list when the chatbot replies, so clients get your wording.</p>
+            <div class="card pform">
+                <b id="baTitle">New answer</b>
+                <input id="baQ" placeholder="When a client asks something like… (e.g. How long do knotless braids take?)" style="margin-top:10px">
+                <textarea id="baA" style="min-height:120px" placeholder="The chatbot should answer…"></textarea>
+                <button class="sec" id="baSave">Save answer</button>
+                <button class="ghost hide" id="baCancel" style="margin-left:6px">Cancel edit</button>
+                <span id="baMsg" class="sub" style="margin-left:10px"></span>
+            </div>
+            <div id="baList"></div>
+            <h3 style="margin-top:28px">Built-in answers</h3>
+            <p class="sub">What the chatbot already says on its own. Press <b>Edit</b> to change the wording; the app then uses your version. <b>Reset</b> goes back to the original.</p>
+            <div id="biList"></div>
         </section>
     </main>
 </div>
@@ -589,6 +643,7 @@
             <select id="ep_t"><option value="product">Product</option><option value="service">Service</option></select>
             <input id="ep_du" placeholder="Duration, e.g. 1 hr 30 mins (services only)">
             <input id="ep_d" placeholder="Description">
+            <input id="ep_s" type="number" min="0" step="1" placeholder="Stock quantity (products only)">
             <div class="sub">Image (leave empty to keep the current one)</div>
             <img id="ep_img" class="th" alt="" title="Click to view full image" onclick="showImg(this.src)" style="width:100%;max-height:240px;object-fit:contain;border-radius:10px;display:none;cursor:zoom-in;background:var(--bd)">
             <input id="ep_f" type="file" accept="image/*">
@@ -655,6 +710,22 @@
     </div>
 </div>
 
+<div id="botMsgModal" class="modal hide">
+    <div class="mbox">
+        <h4>Edit chatbot answer</h4>
+        <p class="sub" id="bmQ"></p>
+        <label class="lbl" for="bmText">Answer the client will see</label>
+        <textarea id="bmText" style="min-height:140px"></textarea>
+        <label class="chk"><input type="checkbox" id="bmSave"> Also use this as the chatbot's answer when someone asks something similar</label>
+        <div class="err" id="bmErr"></div>
+        <div class="mbtns">
+            <button class="ghost hide" id="bmRevert" type="button">Restore original</button>
+            <button class="ghost" id="bmCancel" type="button">Cancel</button>
+            <button id="bmOk" type="button">Save</button>
+        </div>
+    </div>
+</div>
+
 <div id="photoModal" class="modal hide" onclick="this.classList.add('hide')" style="cursor:zoom-out">
     <img id="photoBox" alt="Reference photo">
 </div>
@@ -668,6 +739,19 @@
         <div class="mbtns">
             <button class="ghost" id="reasonCancel">Cancel</button>
             <button id="reasonConfirm">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div id="blockModal" class="modal hide">
+    <div class="mbox">
+        <h4 id="blkTitle">This day has bookings</h4>
+        <p class="sub" id="blkInfo"></p>
+        <div id="blkList" class="ulist"></div>
+        <p class="sub" style="font-size:13px">Closing a day stops new clients from booking it. Bookings you keep still go ahead. Press <b>Save availability</b> afterwards to make it live.</p>
+        <div class="mbtns">
+            <button class="ghost" id="blkCancel" type="button">Don't close this day</button>
+            <button id="blkKeep" type="button">Close the day</button>
         </div>
     </div>
 </div>
@@ -740,7 +824,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
-    const COL = { bookings: 'appointments', users: 'users', products: 'products', admins: 'admins', chats: 'chats', notifications: 'notifications', refunds: 'refund_requests', orders: 'orders', issues: 'issues', reviews: 'reviews', settings: 'settings' };
+    const COL = { bookings: 'appointments', users: 'users', products: 'products', admins: 'admins', chats: 'chats', notifications: 'notifications', refunds: 'refund_requests', orders: 'orders', issues: 'issues', reviews: 'reviews', settings: 'settings', botAnswers: 'chatbot_answers' };
 
     firebase.initializeApp({
       apiKey: 'AIzaSyDMYIUD3vMTyuBhgIzwh-CQGh0Bi8jy_ug',
@@ -863,7 +947,10 @@
         if ($('bnList')) renderBanners(); // keep the banner "Link to" lists up to date
         if (!purgedOnce) { purgedOnce = true; purgeExpiredProducts(); }
       });
-      watch(COL.chats, d => chats = d);
+      // Only chats with the owner are shown here. The client's chatbot chats ('bot') stay private to the app.
+      // Older chats (made before the split) are shown only if they were handed to the owner.
+      watch(COL.chats, d => { chatsAll = d; chats = d.filter(visChat); });
+      watch(COL.botAnswers, d => botAnswers = d);
       watch(COL.orders, d => orders = d);
       watch(COL.issues, d => issues = d);
       watch(COL.reviews, d => reviews = d);
@@ -874,7 +961,7 @@
       unsubs.push(db.collection(COL.settings).doc('availability').onSnapshot(s => {
         if (s.exists && !avDirty) {
           const d = s.data();
-          av = { openWeekdays: Array.isArray(d.openWeekdays) ? d.openWeekdays : [0, 1, 2, 3, 4, 5, 6], blockedDates: Array.isArray(d.blockedDates) ? d.blockedDates : [] };
+          av = { openWeekdays: Array.isArray(d.openWeekdays) ? d.openWeekdays : [0, 1, 2, 3, 4, 5, 6], blockedDates: Array.isArray(d.blockedDates) ? d.blockedDates : [], keptDates: Array.isArray(d.keptDates) ? d.keptDates : [] };
         }
         renderAvail();
       }, e => { console.error('availability', e); $('avMsg').textContent = 'Could not load availability: ' + e.message; }));
@@ -893,10 +980,37 @@
     }
 
     // ---- Availability (admin chooses which days she works) ----
-    let avDate = new Date(), avDirty = false, av = { openWeekdays: [0, 1, 2, 3, 4, 5, 6], blockedDates: [] };
+    let avDate = new Date(), avDirty = false, av = { openWeekdays: [0, 1, 2, 3, 4, 5, 6], blockedDates: [], keptDates: [] };
     window.avMonth = d => { avDate.setDate(1); avDate.setMonth(avDate.getMonth() + d); renderAvail(); };
     window.avToggleDay = i => { const s = new Set(av.openWeekdays); s.has(i) ? s.delete(i) : s.add(i); av.openWeekdays = [...s].sort(); avDirty = true; renderAvail(); };
-    window.avToggleDate = ds => { const s = new Set(av.blockedDates); s.has(ds) ? s.delete(ds) : s.add(ds); av.blockedDates = [...s].sort(); avDirty = true; renderAvail(); };
+    // Blocking a date closes it to NEW bookings. If it already has bookings, the owner decides what happens to them.
+    const activeOn = ds => bookings.filter(b => apptDay(b) === ds && !['cancelled', 'failed', 'completed'].includes(bStatus(b)));
+    const bookedLbl = ds => { const n = activeOn(ds).length; return n ? `<div style="font-size:10px;font-weight:700">${n} booked</div>` : ''; };
+    let blockDate = null;
+    const setBlocked = (ds, on, keep) => {
+      const s = new Set(av.blockedDates), k = new Set(av.keptDates || []);
+      if (on) { s.add(ds); keep ? k.add(ds) : k.delete(ds); } else { s.delete(ds); k.delete(ds); }
+      av.blockedDates = [...s].sort(); av.keptDates = [...k].sort(); avDirty = true; renderAvail(); renderBookingsTable();
+    };
+    window.avToggleDate = ds => {
+      if (av.blockedDates.includes(ds)) return setBlocked(ds, false);
+      if (activeOn(ds).length) { blockDate = ds; paintBlockModal(); $('blockModal').classList.remove('hide'); return; }
+      setBlocked(ds, true);
+    };
+    function paintBlockModal() {
+      const ds = blockDate; if (!ds) return;
+      const list = activeOn(ds).sort((a, b) => to24(bTime(a)).localeCompare(to24(bTime(b))));
+      const nice = new Date(ds + 'T00:00:00').toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+      $('blkTitle').textContent = list.length ? nice + ' already has ' + (list.length === 1 ? 'a booking' : list.length + ' bookings') : nice;
+      $('blkInfo').textContent = list.length
+        ? 'You are closing this day to new bookings. What should happen to the ' + (list.length === 1 ? 'booking' : 'bookings') + ' already on it? Keep ' + (list.length === 1 ? 'it' : 'them') + ' and you will still take ' + (list.length === 1 ? 'it' : 'them') + ', or reschedule to another day.'
+        : 'All bookings have been moved off this day. You can close it now.';
+      $('blkList').innerHTML = list.map(b => `<div class="srow"><span><b>${esc(bTime(b))}</b> · ${esc(bName(b))}<br><small>${esc(uFullName(userOf(b)) || bWho(b))}</small></span><button class="resched" onclick="openResched('${b.id}')">Reschedule</button></div>`).join('');
+      $('blkKeep').textContent = list.length ? 'Keep ' + (list.length === 1 ? 'this booking' : 'these bookings') + ' and close the day' : 'Close the day';
+      $('blkKeep').dataset.keep = list.length ? '1' : '';
+    }
+    $('blkCancel').onclick = () => { $('blockModal').classList.add('hide'); blockDate = null; };
+    $('blkKeep').onclick = () => { if (blockDate) setBlocked(blockDate, true, $('blkKeep').dataset.keep === '1'); $('blockModal').classList.add('hide'); blockDate = null; };
     function renderAvail() {
       if (!$('avGrid')) return;
       const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -909,7 +1023,7 @@
         const ds = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`, wd = new Date(y, m, d).getDay();
         const weekdayOff = !av.openWeekdays.includes(wd), past = ds < today, blocked = av.blockedDates.includes(ds);
         const dead = weekdayOff || past;
-        h += `<div class="cal-cell ${blocked ? 'blocked' : ''} ${dead ? 'closed' : ''} ${ds === today ? 'today' : ''}" ${dead ? '' : `onclick="avToggleDate('${ds}')"`}><div class="cal-num">${d}</div>${blocked ? '<div style="font-size:10px">Blocked</div>' : (weekdayOff && !past ? '<div style="font-size:10px">Off</div>' : '')}</div>`;
+        h += `<div class="cal-cell ${blocked ? 'blocked' : ''} ${dead ? 'closed' : ''} ${ds === today ? 'today' : ''}" ${dead ? '' : `onclick="avToggleDate('${ds}')"`}><div class="cal-num">${d}</div>${blocked ? '<div style="font-size:10px">Blocked</div>' : (weekdayOff && !past ? '<div style="font-size:10px">Off</div>' : '')}${bookedLbl(ds)}</div>`;
       }
       $('avGrid').innerHTML = h;
     }
@@ -917,10 +1031,12 @@
       try {
         const today = SAST();
         const blockedDates = av.blockedDates.filter(d => d >= today).sort();
-        await db.collection(COL.settings).doc('availability').set({ openWeekdays: av.openWeekdays, blockedDates, updatedAt: FV.serverTimestamp() }, { merge: true });
-        av.blockedDates = blockedDates; avDirty = false; renderAvail();
-        const clash = bookings.filter(b => (blockedDates.includes(apptDay(b)) || !av.openWeekdays.includes(new Date(apptDay(b) + 'T00:00:00').getDay())) && apptDay(b) >= today && !['cancelled', 'failed', 'completed'].includes(bStatus(b))).length;
-        $('avMsg').textContent = 'Saved ✓' + (clash ? ` – ${clash} existing booking${clash === 1 ? '' : 's'} fall on days you are now unavailable. Reschedule them.` : '');
+        const keptDates = (av.keptDates || []).filter(d => blockedDates.includes(d)).sort();
+        await db.collection(COL.settings).doc('availability').set({ openWeekdays: av.openWeekdays, blockedDates, keptDates, updatedAt: FV.serverTimestamp() }, { merge: true });
+        av.blockedDates = blockedDates; av.keptDates = keptDates; avDirty = false; renderAvail(); renderBookingsTable();
+        const keptN = bookings.filter(b => keptDates.includes(apptDay(b)) && apptDay(b) >= today && !['cancelled', 'failed', 'completed'].includes(bStatus(b))).length;
+        const clash = bookings.filter(b => ((blockedDates.includes(apptDay(b)) && !keptDates.includes(apptDay(b))) || !av.openWeekdays.includes(new Date(apptDay(b) + 'T00:00:00').getDay())) && apptDay(b) >= today && !['cancelled', 'failed', 'completed'].includes(bStatus(b))).length;
+        $('avMsg').textContent = 'Saved ✓' + (keptN ? ` – ${keptN} existing booking${keptN === 1 ? '' : 's'} on closed days will still go ahead.` : '') + (clash ? ` – ${clash} existing booking${clash === 1 ? '' : 's'} fall on days you are now unavailable. Reschedule them.` : '');
       } catch (e) { $('avMsg').textContent = 'Failed: ' + e.message; }
     };
 
@@ -1107,6 +1223,7 @@
         ${!['cancelled', 'failed', 'completed'].includes(st) ? (b.facePhotoUrl
           ? `<div class="bkface"><img class="ph" src="${esc(b.facePhotoUrl)}" onclick="showImg(this.src)" alt="Client face photo"><span>Face photo received<small>Check it matches the client on arrival</small></span></div>`
           : `<div class="bkface none"><span>Face photo not sent yet</span></div>`) : ''}
+        ${active && (av.keptDates || []).includes(day) ? '<div class="bkwas" style="color:#2e7d32;background:#2e7d3218">✓ This day is closed to new bookings. This booking still goes ahead.</div>' : ''}
         ${b.previousDate ? `<div class="bkwas">↻ Moved from ${esc(b.previousDate)} ${esc(b.previousTime || '')}</div>` : ''}
         ${st === 'cancelled' ? cancelSummary(b, rf) : ''}
         ${active || canRemove ? `<div class="bkact">
@@ -1295,6 +1412,9 @@
         chats: [COL.chats, chats, c => ({ w: !!c.awaitingSalon, u: c.unreadForSalon || 0, bot: c.isBotSession !== false }),
           (c, old) => (c.awaitingSalon && (!old || !old.w)) || (c.isBotSession === false && (c.unreadForSalon || 0) > (old ? old.u : 0)),
           c => [c.awaitingSalon ? 'Client wants the owner' : 'New message', (c.clientName || 'Client') + ': ' + (c.lastMessage || ''), 'messages']],
+        stock: [COL.products, products.filter(p => p.isProduct), p => ({ l: stockLevel(p) }),
+          (p, old) => { const R = { ok: 0, low: 1, out: 2 }, n = stockLevel(p); return !!old && old.l in R && n in R && R[n] > R[old.l]; },
+          p => [stockLevel(p) === 'out' ? 'Out of stock' : 'Running low', stockLevel(p) === 'out' ? p.name + ' has no stock left' : p.name + ': only ' + stockNum(p) + ' left', 'inventory']],
       };
       Object.keys(sets).forEach(k => {
         const [col, list, snap, isNew, msg] = sets[k];
@@ -1612,8 +1732,12 @@
       }).join('') : '<div class="card empty" style="grid-column:1/-1">' + (uq ? 'No users match your search.' : 'No users yet.') + '</div>';
 
       renderProducts();
+      renderInventory();
+      renderBotAnswers();
+      if (!$('blockModal').classList.contains('hide')) paintBlockModal();
+      reconcileStock();
 
-      const cs = [...chats].sort((a, b) => ts(b.lastMessageTime) - ts(a.lastMessageTime));
+      const cs =[...chats].sort((a, b) => ts(b.lastMessageTime) - ts(a.lastMessageTime));
       $('clist').innerHTML = cs.length ? cs.map(c => { const nm = c.clientName || uName(c.clientId) || 'Client'; return `<div class="ci ${c.id === activeChat ? 'on' : ''}" onclick="openChat('${c.id}')">
           ${chatAv(c, '', !!c.awaitingSalon)}
           <div class="cb"><b>${esc(nm)}<span class="tm">${ts(c.lastMessageTime) ? esc(chatTime(c.lastMessageTime)) : ''}</span></b>
@@ -1710,12 +1834,147 @@
         return `<div class="bk pcard ${p.isProduct ? 'product' : 'service'} ${pend ? 'pend' : ''}">${img}
           <div class="pbody">
             <div class="ptop"><b>${esc(p.name)}</b><span class="price">${priceHtml(p)}</span></div>
-            <div><span class="chip">${p.isProduct ? 'Product' : 'Service'}</span> <span class="chip">${esc(p.category)}</span>${salePills(p)}${!p.isProduct && p.duration ? ` <span class="chip">${esc(p.duration)}</span>` : ''}${pend ? ` <span class="leaving">Deleting · ${leftText(ts(p.deleteAt) - now)}</span>` : ''}</div>
+            <div><span class="chip">${p.isProduct ? 'Product' : 'Service'}</span> <span class="chip">${esc(p.category)}</span>${salePills(p)}${p.isProduct ? ' ' + stockChip(p) : ''}${!p.isProduct && p.duration ? ` <span class="chip">${esc(p.duration)}</span>` : ''}${pend ? ` <span class="leaving">Deleting · ${leftText(ts(p.deleteAt) - now)}</span>` : ''}</div>
             <div class="pdesc">${esc(p.description) || '<span class="sub">No description</span>'}</div>
             <div class="pact">${pend ? `<button class="sec" onclick="cancelDelete('${p.id}')">Cancel delete</button>` : `<button class="sec" onclick="editProd('${p.id}')">Edit</button><button class="del" onclick="scheduleDelete('${p.id}')">Delete</button>`}</div>
           </div></div>`;
       }).join('') : `<div class="sub">No ${prodTab === 'product' ? 'products' : 'services'} yet. Use the form above to add one.</div>`;
     }
+    // ---- Inventory ----
+    // Stock lives on each product as `stock` (a whole number). No `stock` field = not tracked yet.
+    // `stockBaseAt` is the moment the owner last typed an exact count; orders placed before it are
+    // already reflected in that count, so they never change the stock afterwards.
+    const LOW_STOCK = 5; // this many or fewer left = "running low"
+    const hasStock = p => p.stock !== undefined && p.stock !== null && p.stock !== '' && isFinite(Number(p.stock));
+    const stockNum = p => Math.max(0, Math.floor(Number(p.stock)));
+    const stockLevel = p => !hasStock(p) ? 'none' : stockNum(p) === 0 ? 'out' : stockNum(p) <= LOW_STOCK ? 'low' : 'ok';
+    const stockChip = p => {
+      const l = stockLevel(p);
+      const t = l === 'none' ? 'Stock not set' : l === 'out' ? 'Out of stock' : l === 'low' ? 'Only ' + stockNum(p) + ' left' : stockNum(p) + ' in stock';
+      return `<span class="stk-pill stk-${l}">${esc(t)}</span>`;
+    };
+    let invFilter = 'all', invQ = '';
+    window.setInvFilter = f => { invFilter = f; renderInventory(true); };
+    function renderInventory(force) {
+      if (!$('invList')) return;
+      const items = products.filter(p => p.isProduct && !p.pendingDeletion);
+      const cnt = l => items.filter(p => stockLevel(p) === l).length;
+      const nLow = cnt('low'), nOut = cnt('out'), nBad = nLow + nOut;
+      $('stockBadge').textContent = nBad; $('stockBadge').classList.toggle('hide', !nBad);
+      const units = items.reduce((a, p) => a + (hasStock(p) ? stockNum(p) : 0), 0);
+      $('invStats').innerHTML = [['ok', 'In stock', cnt('ok')], ['low', 'Running low (' + LOW_STOCK + ' or fewer)', nLow], ['out', 'Out of stock', nOut], ['none', 'Stock not set', cnt('none')]]
+        .map(([k, l, n]) => `<div class="stat s-${k}"><b>${n}</b><span>${l}</span></div>`).join('') + `<div class="stat"><b>${units}</b><span>Units on hand</span></div>`;
+      const chips = [['all', 'All', items.length], ['attention', 'Needs attention', nBad], ['out', 'Out of stock', nOut], ['low', 'Running low', nLow], ['ok', 'In stock', cnt('ok')], ['none', 'Not set', cnt('none')]];
+      $('invChips').innerHTML = chips.map(([k, l, n]) => `<button class="${k === invFilter ? 'on' : ''}" onclick="setInvFilter('${k}')">${l}<small>${n}</small></button>`).join('');
+      // Do not redraw the list while the owner is typing a number
+      const ae = document.activeElement;
+      if (!force && ae && ae.classList && ae.classList.contains('inv-in')) return;
+      const q = invQ.trim().toLowerCase();
+      const list = items.filter(p => {
+        const l = stockLevel(p);
+        if (invFilter === 'attention' ? !(l === 'low' || l === 'out') : (invFilter !== 'all' && l !== invFilter)) return false;
+        return !q || (String(p.name || '') + ' ' + String(p.category || '')).toLowerCase().includes(q);
+      }).sort((a, b) => String(a.category || 'Other').localeCompare(String(b.category || 'Other')) || String(a.name || '').localeCompare(String(b.name || '')) || String(a.id).localeCompare(String(b.id)));
+      $('invCount').textContent = list.length + ' product' + (list.length === 1 ? '' : 's');
+      let lastCat = null;
+      $('invList').innerHTML = list.length ? list.map(p => {
+        const cat = p.category || 'Other';
+        const head = cat !== lastCat ? `<div class="inv-cat">${esc(cat)} <small>${list.filter(x => (x.category || 'Other') === cat).length}</small></div>` : '';
+        lastCat = cat;
+        const l = stockLevel(p), pct = hasStock(p) ? Math.min(100, Math.round(stockNum(p) / (LOW_STOCK * 4) * 100)) : 0;
+        return head + `<div class="inv-row ${l}">
+          ${p.imageUrl ? `<img class="inv-img" src="${esc(p.imageUrl)}" alt="">` : '<div class="inv-img">🛍️</div>'}
+          <div><b>${esc(p.name)}</b><div class="sub" style="margin:2px 0 0">${esc(p.category || '')} · R${esc(p.price)}</div></div>
+          <div><div class="inv-qty">${hasStock(p) ? stockNum(p) : '—'}</div>${stockChip(p)}<div class="inv-bar"><i style="width:${pct}%"></i></div></div>
+          <div class="inv-ctl">
+            <button class="ghost" title="Take one off" onclick="invAdj('${p.id}',-1)">−1</button>
+            <button class="ghost" title="Add one" onclick="invAdj('${p.id}',1)">+1</button>
+            <input class="inv-in" id="inv_${p.id}" type="number" min="0" step="1" placeholder="Qty" onkeydown="if(event.key==='Enter')invSet('${p.id}')">
+            <button class="sec" title="Replace the stock with this exact number" onclick="invSet('${p.id}')">Set to</button>
+            <button title="Add this many to the current stock (new delivery)" onclick="invAdd('${p.id}')">Add</button>
+          </div></div>`;
+      }).join('') : `<div class="card empty">${items.length ? 'No products match this filter.' : 'No products yet. Add products on the Products tab.'}</div>`;
+    }
+    $('invSearch').oninput = e => { invQ = e.target.value; renderInventory(true); };
+    const invDone = () => { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); renderInventory(true); };
+    async function invWrite(id, fn) {
+      const p = products.find(x => x.id === id); if (!p) return;
+      try { await db.collection(COL.products).doc(id).update(fn(p)); invDone(); } catch (e) { alert('Could not update stock: ' + e.message); }
+    }
+    window.invAdj = (id, d) => invWrite(id, p => {
+      if (hasStock(p)) return { stock: FV.increment(d), stockUpdatedAt: FV.serverTimestamp() };
+      return { stock: Math.max(0, d), stockBaseAt: FV.serverTimestamp(), stockUpdatedAt: FV.serverTimestamp() };
+    });
+    window.invSet = id => {
+      const v = parseInt($('inv_' + id).value, 10);
+      if (isNaN(v) || v < 0) return alert('Type the stock number (0 or more) in the box first.');
+      invWrite(id, () => ({ stock: v, stockBaseAt: FV.serverTimestamp(), stockUpdatedAt: FV.serverTimestamp() }));
+    };
+    window.invAdd = id => {
+      const v = parseInt($('inv_' + id).value, 10);
+      if (isNaN(v) || v <= 0) return alert('Type how many units you received in the box first.');
+      invWrite(id, p => hasStock(p)
+        ? { stock: FV.increment(v), stockUpdatedAt: FV.serverTimestamp() }
+        : { stock: v, stockBaseAt: FV.serverTimestamp(), stockUpdatedAt: FV.serverTimestamp() });
+    };
+
+    // ---- Automatic stock: a paid order takes stock off, a cancelled order puts it back ----
+    // Each order is flagged (stockDeducted / stockRestored) inside a transaction, so nothing is ever counted twice.
+    // The client app or a Cloud Function can use the same flags (see INVENTORY_APP_NOTES.md).
+    const stockFailed = new Set();
+    let stockRunning = false, stockAgain = false;
+    const itemPid = it => {
+      const id = it.productId || it.product_id || it.id;
+      if (id && products.some(p => p.id === id)) return id;
+      const nm = String(it.name || '').trim().toLowerCase();
+      const p = nm && products.find(x => x.isProduct && String(x.name || '').trim().toLowerCase() === nm);
+      return p ? p.id : null;
+    };
+    const needsStockWork = o => (!o.stockDeducted && isPaid(o) && oCounts(o)) || (!!o.stockDeducted && !o.stockRestored && !oCounts(o));
+    async function reconcileStock() {
+      if (!loaded[COL.orders] || !loaded[COL.products]) return;
+      if (stockRunning) { stockAgain = true; return; }
+      stockRunning = true;
+      try {
+        do {
+          stockAgain = false;
+          for (const o of orders.filter(x => !stockFailed.has(x.id) && needsStockWork(x))) {
+            try {
+              await db.runTransaction(async tx => {
+                const oref = db.collection(COL.orders).doc(o.id), os = await tx.get(oref);
+                if (!os.exists) return;
+                const od = os.data();
+                const deduct = !od.stockDeducted && isPaid(od) && oCounts(od);
+                const restore = !!od.stockDeducted && !od.stockRestored && !oCounts(od);
+                if (!deduct && !restore) return;
+                const want = {}, unmatched = [];
+                if (deduct) (Array.isArray(od.items) ? od.items : []).forEach(it => {
+                  const pid = itemPid(it), q = Math.max(1, Number(it.quantity) || 1);
+                  if (pid) want[pid] = (want[pid] || 0) + q; else unmatched.push(it.name || '?');
+                });
+                else Object.entries(od.stockTaken || {}).forEach(([pid, q]) => { if (q > 0) want[pid] = q; });
+                const ids = Object.keys(want);
+                const snaps = await Promise.all(ids.map(id => tx.get(db.collection(COL.products).doc(id))));
+                const took = {}, orderAt = ts(od.createdAt);
+                snaps.forEach((s, i) => {
+                  if (!s.exists) return;
+                  const d = s.data(), id = ids[i];
+                  if (!hasStock(d)) return;
+                  if (deduct && orderAt && ts(d.stockBaseAt) && orderAt < ts(d.stockBaseAt)) return; // already counted in the owner's count
+                  const cur = stockNum(d), next = deduct ? Math.max(0, cur - want[id]) : cur + want[id];
+                  if (deduct) took[id] = cur - next;
+                  tx.update(s.ref, { stock: next, stockUpdatedAt: FV.serverTimestamp() });
+                });
+                tx.update(oref, deduct
+                  ? { stockDeducted: true, stockTaken: took, stockDeductedAt: FV.serverTimestamp(), ...(unmatched.length ? { stockUnmatched: unmatched } : {}) }
+                  : { stockRestored: true, stockRestoredAt: FV.serverTimestamp() });
+              });
+            } catch (e) { stockFailed.add(o.id); console.error('Stock update failed for order ' + o.id, e); }
+          }
+        } while (stockAgain);
+      } finally { stockRunning = false; }
+    }
+
     let editingId = null;
     window.editProd = id => {
       const p = products.find(x => x.id === id); if (!p) return;
@@ -1726,6 +1985,7 @@
       c.value = p.category || 'Hair';
       $('ep_t').value = p.isProduct ? 'product' : 'service';
       $('ep_du').value = p.isProduct ? '' : (p.duration || '');
+      $('ep_s').value = p.isProduct && hasStock(p) ? stockNum(p) : '';
       $('ep_d').value = p.description || ''; $('ep_f').value = ''; $('ep_msg').textContent = '';
       const im = $('ep_img'); im.style.display = p.imageUrl ? 'block' : 'none'; im.src = p.imageUrl || '';
       $('prodModal').classList.remove('hide');
@@ -1733,10 +1993,15 @@
     $('ep_save').onclick = async () => {
       const name = $('ep_n').value.trim(), price = parseFloat($('ep_p').value), isProduct = $('ep_t').value === 'product';
       if (!name || isNaN(price)) return alert('Name and a valid price are required.');
+      const sv = $('ep_s').value.trim(), sn = parseInt(sv, 10);
+      if (isProduct && sv !== '' && (isNaN(sn) || sn < 0)) return alert('Stock must be a whole number, 0 or more.');
       $('ep_save').disabled = true;
       try {
         const f = $('ep_f').files[0];
         const upd = { name, price, category: $('ep_c').value, isProduct, description: $('ep_d').value.trim() };
+        const cur = products.find(x => x.id === editingId);
+        if (!isProduct) upd.stock = FV.delete();
+        else if (sv !== '' && !(cur && hasStock(cur) && stockNum(cur) === sn)) { upd.stock = sn; upd.stockBaseAt = FV.serverTimestamp(); upd.stockUpdatedAt = FV.serverTimestamp(); }
         if (isProduct) { upd.duration = 'Product'; upd.durationMins = FV.delete(); }
         else { const du = $('ep_du').value.trim() || '1 hr'; upd.duration = du; upd.durationMins = parseMins(du); }
         if (f) { $('ep_msg').textContent = 'Uploading image…'; upd.imageUrl = await uploadImage(f); }
@@ -1922,7 +2187,8 @@
         [orders.length, 'Orders'],
         [users.length, 'Users'],
         [thisMonth, 'New users this month'],
-        [products.length, 'Products & services']
+        [products.length, 'Products & services'],
+        [products.filter(p => p.isProduct && ['low', 'out'].includes(stockLevel(p))).length, 'Low / out of stock']
       ].map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
 
       const labels = days.map(d => `${d.getDate()}/${d.getMonth() + 1}`);
@@ -2317,6 +2583,7 @@
         lkInit = true;
         try { const s = JSON.parse(localStorage.getItem('kk_owner_loc') || 'null'); if (s) { $('lkAddr').value = s.label || ''; showNearest(s.lat, s.lng, s.label); } } catch (e) {}
       }
+      paintSaved();
       if (lkMap) setTimeout(() => lkMap.invalidateSize(), 50);
     }
     async function showNearest(lat, lng, label) {
@@ -2407,9 +2674,26 @@
           $('lkAddr').focus();
         }, { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 });
     };
+    // Saved location (kept in this browser) so the owner can search from it again with one tap
+    const getSavedLoc = () => { try { const s = JSON.parse(localStorage.getItem('kk_owner_loc') || 'null'); return s && isFinite(s.lat) && isFinite(s.lng) ? s : null; } catch (e) { return null; } };
+    function paintSaved() {
+      const s = getSavedLoc();
+      $('lkSavedBar').classList.toggle('hide', !s);
+      if (s) { const nm = String(s.label || 'saved location'); $('lkUseSaved').textContent = 'Use my saved location: ' + (nm.length > 28 ? nm.slice(0, 27) + '…' : nm); }
+    }
+    $('lkUseSaved').onclick = () => {
+      if (lkWorking) return;
+      const s = getSavedLoc(); if (!s) { paintSaved(); return; }
+      $('lkAddr').value = s.label || '';
+      showNearest(s.lat, s.lng, s.label || 'my saved location');
+    };
+    $('lkForget').onclick = () => {
+      try { localStorage.removeItem('kk_owner_loc'); } catch (e) {}
+      paintSaved(); lkSay('Saved location removed.');
+    };
     $('lkSave').onclick = () => {
       if (!lkPos) { lkSay('Search for a location first, then press “Save as my location”.', true); return; }
-      try { localStorage.setItem('kk_owner_loc', JSON.stringify(lkPos)); lkSay('Saved. This location will open automatically next time.'); }
+      try { localStorage.setItem('kk_owner_loc', JSON.stringify(lkPos)); lkSay('Saved. This location will open automatically next time, and you can use it any time with “Use my saved location”.'); paintSaved(); }
       catch (e) { lkSay('Could not save the location in this browser.', true); }
     };
 
@@ -2542,6 +2826,131 @@
       b.update(ref, { unreadForSalon: 0 });
       b.commit().catch(console.error);
     }
+    // ---- Chatbot: review conversations and edit the bot's answers ----
+    let chatsAll = [], botAnswers = [], showBotChats = false, bmMsg = null, baEditId = null;
+    // Owner chats always show. Chatbot-only chats show only when the owner turns the option on.
+    const isOwnerChat = c => c.type === 'owner' ? !!c.lastMessage : (!c.type && c.isBotSession === false);
+    const visChat = c => isOwnerChat(c) || (showBotChats && c.type === 'bot' && !!c.lastMessage);
+    $('showBotChats').onchange = e => {
+      showBotChats = e.target.checked; chats = chatsAll.filter(visChat);
+      if (activeChat && !chats.some(c => c.id === activeChat)) {
+        activeChat = null; if (msgUnsub) { msgUnsub(); msgUnsub = null; }
+        $('chead').innerHTML = '<span style="color:var(--mu)">Select a conversation</span>';
+        $('msgs').innerHTML = '<div class="mempty">' + ic('chat', 44) + 'Pick a conversation on the left</div>';
+      }
+      render();
+    };
+    const prevClientText = id => {
+      const i = msgs.findIndex(m => m.id === id);
+      for (let j = i - 1; j >= 0; j--) if (msgs[j].senderType === 'client' && msgs[j].text) return msgs[j].text;
+      return '';
+    };
+    window.editBotMsg = id => {
+      const m = msgs.find(x => x.id === id); if (!m) return;
+      bmMsg = m; const q = prevClientText(id);
+      $('bmQ').textContent = q ? 'The client asked: “' + q + '”' : '';
+      $('bmText').value = m.text || ''; $('bmSave').checked = false; $('bmErr').textContent = '';
+      $('bmRevert').classList.toggle('hide', !(m.originalText && m.originalText !== m.text));
+      $('botMsgModal').classList.remove('hide'); $('bmText').focus();
+    };
+    $('bmCancel').onclick = () => $('botMsgModal').classList.add('hide');
+    $('bmRevert').onclick = () => { if (bmMsg && bmMsg.originalText) $('bmText').value = bmMsg.originalText; };
+    $('bmOk').onclick = async () => {
+      const m = bmMsg, text = $('bmText').value.trim();
+      if (!m || !activeChat) return;
+      if (!text) { $('bmErr').textContent = 'The answer cannot be empty.'; return; }
+      const q = prevClientText(m.id);
+      if ($('bmSave').checked && !q) { $('bmErr').textContent = 'There is no client question above this answer to attach it to.'; return; }
+      $('bmOk').disabled = true;
+      try {
+        const cref = db.collection(COL.chats).doc(activeChat), b = db.batch();
+        if (text !== m.text) {
+          const reverting = !!m.originalText && text === m.originalText;
+          b.update(cref.collection('messages').doc(m.id), { text, originalText: m.originalText ?? m.text, editedByAdmin: !reverting, editedAt: FV.serverTimestamp() });
+          const last = msgs[msgs.length - 1];
+          if (last && last.id === m.id) b.update(cref, { lastMessage: text });
+        }
+        if ($('bmSave').checked) b.set(db.collection(COL.botAnswers).doc(), { question: q, answer: text, active: true, source: 'chat', createdAt: FV.serverTimestamp() });
+        await b.commit();
+        $('botMsgModal').classList.add('hide');
+      } catch (e) { $('bmErr').textContent = 'Could not save: ' + e.message; }
+      $('bmOk').disabled = false;
+    };
+
+    // The answers built into the app (keep in step with SupportBot in the client app).
+    // 'order' is not listed: it looks up the client's real order, so it cannot be a fixed text.
+    const BUILTIN = [
+      { id: 'howtobuy', title: 'How to buy a product', kw: 'buy, purchase, checkout, cart, shop', a: 'To buy a product: open the Shop on the Home tab, tap a product, add it to your cart, then go to checkout. Choose delivery or a locker/kiosk, pay by card or EFT, and your order appears under My Orders. You earn 25 loyalty points for every order.' },
+      { id: 'reschedule', title: 'Rescheduling a booking', kw: 'reschedule, change my booking, move my appointment', a: 'To reschedule, open Profile > Refunds, find your upcoming appointment and tap Reschedule. A R100 rescheduling fee applies and the new time must be available.' },
+      { id: 'cancel', title: 'Cancelling a booking', kw: 'cancel, cancellation, cannot make it', a: 'To cancel, open Profile > Refunds, choose your appointment and tap Request refund. If you cancel yourself you receive a 50% refund. If the salon cancels, you receive a full refund.' },
+      { id: 'refund', title: 'Refunds', kw: 'refund, money back, reimburse', a: 'If you cancel a booking yourself you receive a 50% refund of what you paid. If the salon cancels, you receive a full refund. Approved refunds go back to your original payment method within 3-5 business days. Request one on the Refunds page.' },
+      { id: 'booking', title: 'Booking policy', kw: 'book, booking, appointment, policy, late', a: 'To book: open the Bookings tab, choose a service, pick a date and time, add a reference photo if you have one, and pay. Your booking is confirmed once payment is complete. If you cancel yourself you receive a 50% refund; if the salon cancels, a full refund. A R100 fee applies to reschedule.' },
+      { id: 'delivery', title: 'Delivery times', kw: 'delivery, courier, shipping, locker, kiosk, arrive', a: 'We ship with The Courier Guy, to your door or to a locker/kiosk. Delivery usually takes 2-5 business days once your order has shipped. When it ships, the tracking number appears in the app under My Orders.' },
+      { id: 'loyalty', title: 'Loyalty points', kw: 'loyalty, points, reward, redeem, discount, qr', a: 'You earn 25 points for every order and 50 points for every completed booking (scan the QR code at the salon after your appointment). At 500 points you can redeem R100 credit, usable on a booking or a purchase.' },
+      { id: 'products', title: 'Products, sizes and prices', kw: 'product, press on, nails, size, stock, price', a: 'You can browse all our products in the Shop, including sizes, prices and photos. If a product you want is not listed, tap "Speak to the owner" and we will help.' },
+      { id: 'payment', title: 'Payment', kw: 'pay, payment, card, eft, secure, paystack', a: 'We accept card and EFT payments through Paystack. All payments are encrypted and processed through a secure gateway.' },
+      { id: 'account', title: 'Account and password', kw: 'password, login, profile, email, account', a: 'To reset your password tap "Forgot Password?" on the login screen. To change your details go to Profile > Personal Information and tap Edit.' },
+      { id: 'referral', title: 'Referrals', kw: 'referral, refer a friend, invite', a: 'Our referral program is coming soon. Tap "Speak to the owner" if you would like to know more.' },
+      { id: 'greeting', title: 'Opening greeting', kw: 'shown when the chat opens', a: 'Hi! I am the Kotton Kandy assistant. I can help with orders, delivery, bookings, refunds, products and loyalty points. What would you like to know?' }
+    ];
+    const biOverride = id => botAnswers.find(x => x.id === 'builtin_' + id);
+    function renderBuiltin() {
+      if (!$('biList')) return;
+      $('biList').innerHTML = BUILTIN.map(b => {
+        const o = biOverride(b.id), edited = o && o.active !== false && o.answer;
+        return `<div class="card">
+          <div class="rhead"><b>${esc(b.title)}</b><span class="chip ${edited ? 'approved' : ''}">${edited ? 'Edited by you' : 'Original'}</span></div>
+          <div class="sub" style="margin:4px 0">Triggered by: ${esc(b.kw)}</div>
+          <div class="rnote" style="font-style:normal;white-space:pre-wrap">${esc(edited ? o.answer : b.a)}</div>
+          <div class="ract"><button class="sec" onclick="biEdit('${b.id}')">Edit</button>
+            ${o ? `<button class="ghost" onclick="biReset('${b.id}')">Reset to original</button>` : ''}</div>
+        </div>`;
+      }).join('');
+    }
+    window.biEdit = id => {
+      const b = BUILTIN.find(x => x.id === id), o = biOverride(id);
+      baEditId = 'builtin_' + id;
+      $('baQ').value = b.title; $('baQ').readOnly = true;
+      $('baA').value = o && o.answer ? o.answer : b.a;
+      $('baTitle').textContent = 'Editing built-in answer'; $('baCancel').classList.remove('hide'); $('baMsg').textContent = '';
+      $('botanswers').scrollIntoView({ behavior: 'smooth' });
+    };
+    window.biReset = id => { if (confirm('Go back to the original answer?')) db.collection(COL.botAnswers).doc('builtin_' + id).delete().catch(e => alert(e.message)); };
+
+    // Saved answers list (what the chatbot should say to common questions)
+    function renderBotAnswers() {
+      renderBuiltin();
+      if (!$('baList')) return;
+      const list = botAnswers.filter(a => !a.builtin).sort((a, b) => ts(b.createdAt) - ts(a.createdAt));
+      $('baList').innerHTML = list.length ? list.map(a => `<div class="card">
+        <div class="rhead"><b>${esc(a.question)}</b><span class="chip ${a.active === false ? '' : 'approved'}">${a.active === false ? 'Off' : 'On'}</span></div>
+        <div class="rnote" style="font-style:normal;white-space:pre-wrap">${esc(a.answer)}</div>
+        <div class="ract"><button class="sec" onclick="baEdit('${a.id}')">Edit</button>
+          <button class="ghost" onclick="baToggle('${a.id}',${a.active === false})">${a.active === false ? 'Turn on' : 'Turn off'}</button>
+          <button class="del" style="padding:10px 16px;font-size:14px" onclick="baDelete('${a.id}')">Delete</button></div>
+      </div>`).join('') : '<div class="card empty">No saved answers yet. Edit a chatbot reply in Messages, or add one above.</div>';
+    }
+    function baReset() { baEditId = null; $('baQ').readOnly = false; $('baQ').value = ''; $('baA').value = ''; $('baTitle').textContent = 'New answer'; $('baCancel').classList.add('hide'); }
+    window.baEdit = id => {
+      const a = botAnswers.find(x => x.id === id); if (!a) return;
+      baEditId = id; $('baQ').value = a.question || ''; $('baA').value = a.answer || '';
+      $('baTitle').textContent = 'Editing answer'; $('baCancel').classList.remove('hide'); $('baMsg').textContent = '';
+      $('botanswers').scrollIntoView({ behavior: 'smooth' });
+    };
+    $('baCancel').onclick = () => { baReset(); $('baMsg').textContent = ''; };
+    $('baSave').onclick = async () => {
+      const question = $('baQ').value.trim(), answer = $('baA').value.trim();
+      if (!question || !answer) { $('baMsg').textContent = 'Write both the question and the answer.'; return; }
+      try {
+        if (baEditId && baEditId.startsWith('builtin_')) await db.collection(COL.botAnswers).doc(baEditId).set({ builtin: true, intent: baEditId.slice(8), question, answer, active: true, source: 'builtin', updatedAt: FV.serverTimestamp() }, { merge: true });
+        else if (baEditId) await db.collection(COL.botAnswers).doc(baEditId).update({ question, answer, updatedAt: FV.serverTimestamp() });
+        else await db.collection(COL.botAnswers).add({ question, answer, active: true, source: 'admin', createdAt: FV.serverTimestamp() });
+        baReset(); $('baMsg').textContent = 'Saved ✓';
+      } catch (e) { $('baMsg').textContent = 'Failed: ' + e.message; }
+    };
+    window.baToggle = (id, on) => db.collection(COL.botAnswers).doc(id).update({ active: on }).catch(e => alert(e.message));
+    window.baDelete = id => { if (confirm('Delete this saved answer?')) db.collection(COL.botAnswers).doc(id).delete().catch(e => alert(e.message)); };
+
     window.openChat = id => {
       activeChat = id; $('msgs').innerHTML = ''; render();
       if (msgUnsub) msgUnsub();
@@ -2549,7 +2958,7 @@
         msgs = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => ts(a.timestamp) - ts(b.timestamp));
         $('msgs').innerHTML = msgs.length ? msgs.map(m => `<div class="mrow ${m.senderType === 'salon' ? 'me' : ''}">
           ${m.senderType === 'bot' ? '<div class="who">' + ic('bot', 13) + 'Chatbot</div>' : ''}${(() => { const bub = `<div class="m ${m.senderType === 'bot' ? 'bot' : ''}">${m.imageUrl ? `<img src="${esc(m.imageUrl)}" style="max-width:100%;border-radius:12px;display:block;margin-bottom:4px">` : ''}${esc(m.text)}</div>`; const c = chats.find(x => x.id === activeChat); return m.senderType === 'client' && c ? `<div class="mline">${chatAv(c, 'sm')}${bub}</div>` : bub; })()}
-          ${ts(m.timestamp) ? `<div class="mt">${esc(chatTime(m.timestamp))}</div>` : ''}</div>`).join('') : '<div class="mempty">' + ic('chat', 44) + 'No messages yet</div>';
+          <div class="mt">${ts(m.timestamp) ? esc(chatTime(m.timestamp)) : ''}${m.editedByAdmin ? ' · <span class="m-ed">edited by you</span>' : ''}${m.senderType === 'bot' ? ` · <a class="m-edit" onclick="editBotMsg('${m.id}')">Edit answer</a>` : ''}</div></div>`).join('') : '<div class="mempty">' + ic('chat', 44) + 'No messages yet</div>';
         $('msgs').scrollTop = $('msgs').scrollHeight;
         markRead(id, msgs);
       }, e => alert('Could not load messages: ' + e.message));
@@ -2566,7 +2975,7 @@
       } catch (e) { alert('Send failed: ' + e.message); }
     }
     window.closeChat = id => {
-      if (!confirm('End this chat? The conversation stays saved. If the client writes again, a new chatbot session starts.')) return;
+      if (!confirm('End this chat? The conversation stays saved. If the client writes again, the chat opens again.')) return;
       db.collection(COL.chats).doc(id).update({ closed: true, awaitingSalon: false, closedAt: FV.serverTimestamp() }).catch(e => alert(e.message));
     };
     $('sendBtn').onclick = sendReply;
@@ -2591,9 +3000,10 @@
         await db.collection(COL.products).add({
           name, price, category: $('pc').value, isProduct, imageUrl,
           description: $('pd').value.trim(), duration: isProduct ? 'Product' : ($('pdu').value.trim() || '1 hr'),
-          ...(isProduct ? {} : { durationMins: parseMins($('pdu').value.trim() || '1 hr') }), createdAt: FV.serverTimestamp()
+          ...(isProduct ? {} : { durationMins: parseMins($('pdu').value.trim() || '1 hr') }), createdAt: FV.serverTimestamp(),
+          ...(isProduct && $('ps').value.trim() !== '' ? { stock: Math.max(0, parseInt($('ps').value, 10) || 0), stockBaseAt: FV.serverTimestamp(), stockUpdatedAt: FV.serverTimestamp() } : {})
         });
-        ['pn', 'pp', 'pf', 'pd', 'pdu'].forEach(i => $(i).value = '');
+        ['pn', 'pp', 'pf', 'pd', 'pdu', 'ps'].forEach(i => $(i).value = '');
         $('pMsg').textContent = 'Added ✓';
       } catch (e) { $('pMsg').textContent = ''; alert(e.message); }
       $('addProd').disabled = false;

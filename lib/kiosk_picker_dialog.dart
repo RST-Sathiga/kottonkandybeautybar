@@ -1,7 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:latlong2/latlong.dart';
 
 class KioskLocation {
   final String id;
@@ -22,15 +23,15 @@ class KioskLocation {
 
   /// Plain values, safe to save on the order.
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'name': name,
-        'address': address,
-        'latitude': latitude,
-        'longitude': longitude,
-      };
+    'id': id,
+    'name': name,
+    'address': address,
+    'latitude': latitude,
+    'longitude': longitude,
+  };
 }
 
-/// Lets the customer pick a Pudo locker on a Google Map.
+/// Lets the customer pick a Pudo locker on an OpenStreetMap map (free, no API key).
 /// If [nearLatitude]/[nearLongitude] are given (e.g. the address they searched),
 /// lockers are sorted by distance from there, otherwise from their GPS position.
 class KioskPickerDialog extends StatefulWidget {
@@ -63,7 +64,7 @@ class _KioskPickerDialogState extends State<KioskPickerDialog> {
   bool _isLoading = true;
   bool _hasGps = false;
   KioskLocation? _selectedKiosk;
-  GoogleMapController? _mapController;
+  final MapController _mapController = MapController();
 
   @override
   void initState() {
@@ -73,7 +74,7 @@ class _KioskPickerDialogState extends State<KioskPickerDialog> {
 
   @override
   void dispose() {
-    _mapController?.dispose();
+    _mapController.dispose();
     super.dispose();
   }
 
@@ -143,25 +144,46 @@ class _KioskPickerDialogState extends State<KioskPickerDialog> {
   void _select(KioskLocation kiosk, {bool moveMap = true}) {
     setState(() => _selectedKiosk = kiosk);
     if (moveMap) {
-      _mapController?.animateCamera(
-        CameraUpdate.newLatLngZoom(LatLng(kiosk.latitude, kiosk.longitude), 14),
-      );
+      try {
+        _mapController.move(LatLng(kiosk.latitude, kiosk.longitude), 14);
+      } catch (_) {
+        // map not ready yet; the list selection still works
+      }
     }
   }
 
-  Set<Marker> get _markers {
-    return _allKiosks.map((kiosk) {
+  List<Marker> get _markers {
+    final List<Marker> list = _allKiosks.map((kiosk) {
       final bool isSelected = _selectedKiosk?.id == kiosk.id;
       return Marker(
-        markerId: MarkerId(kiosk.id),
-        position: LatLng(kiosk.latitude, kiosk.longitude),
-        infoWindow: InfoWindow(title: kiosk.name, snippet: kiosk.address),
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-          isSelected ? BitmapDescriptor.hueViolet : BitmapDescriptor.hueRed,
+        point: LatLng(kiosk.latitude, kiosk.longitude),
+        width: 40,
+        height: 40,
+        child: GestureDetector(
+          onTap: () => _select(kiosk, moveMap: false),
+          child: Icon(
+            Icons.location_on,
+            size: isSelected ? 40 : 32,
+            color: isSelected ? primaryPurple : Colors.red,
+          ),
         ),
-        onTap: () => _select(kiosk, moveMap: false),
       );
-    }).toSet();
+    }).toList();
+    if (_hasGps) {
+      list.add(Marker(
+        point: _userPosition,
+        width: 22,
+        height: 22,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.blue,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 3),
+          ),
+        ),
+      ));
+    }
+    return list;
   }
 
   @override
@@ -191,14 +213,24 @@ class _KioskPickerDialogState extends State<KioskPickerDialog> {
                 height: mapH,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: GoogleMap(
-                    initialCameraPosition: CameraPosition(target: _userPosition, zoom: 11),
-                    onMapCreated: (c) => _mapController = c,
-                    markers: _markers,
-                    myLocationEnabled: _hasGps,
-                    myLocationButtonEnabled: false,
-                    zoomControlsEnabled: true,
-                    mapToolbarEnabled: false,
+                  child: FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(
+                      initialCenter: _userPosition,
+                      initialZoom: 10,
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.kottonkandy.app',
+                      ),
+                      MarkerLayer(markers: _markers),
+                      const RichAttributionWidget(
+                        attributions: [
+                          TextSourceAttribution('OpenStreetMap contributors'),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),

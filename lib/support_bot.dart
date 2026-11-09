@@ -20,6 +20,12 @@ class _Intent {
 /// FAQ chatbot for Kotton Kandy. No admin involved until the customer asks
 /// for a person.
 class SupportBot {
+  /// The opening message, using the owner's wording when she changed it.
+  static Future<String> greetingFor() async {
+    await _loadApproved();
+    return _overrides['greeting'] ?? greeting;
+  }
+
   static const greeting =
       'Hi! I am the Kotton Kandy assistant. I can help with orders, delivery, '
       'bookings, refunds, products and loyalty points. What would you like to know?';
@@ -84,6 +90,66 @@ class SupportBot {
     'complaint', 'call me', 'speak with',
   ];
 
+  // ---- Answers the owner approved in the admin page (chatbot_answers) ----
+  static List<Map<String, dynamic>> _approved = const [];
+  // Owner's rewrites of the built-in answers, keyed by intent id (and 'greeting').
+  static Map<String, String> _overrides = const {};
+  static DateTime? _approvedAt;
+
+  static Future<void> _loadApproved() async {
+    final now = DateTime.now();
+    if (_approvedAt != null && now.difference(_approvedAt!).inMinutes < 5) return;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('chatbot_answers')
+          .where('active', isEqualTo: true)
+          .get();
+      final all = snap.docs.map((d) => d.data()).toList();
+      _approved = all.where((a) => a['builtin'] != true).toList();
+      _overrides = {
+        for (final a in all)
+          if (a['builtin'] == true &&
+              (a['answer'] ?? '').toString().trim().isNotEmpty)
+            a['intent'].toString(): a['answer'].toString().trim(),
+      };
+      _approvedAt = now;
+    } catch (_) {
+      _approvedAt = now; // do not retry on every message; built-in answers still work
+    }
+  }
+
+  static const _stop = {
+    'the', 'a', 'an', 'is', 'are', 'do', 'i', 'my', 'me', 'you', 'to', 'of', 'and',
+    'can', 'how', 'what', 'for', 'it', 'in', 'on', 'we', 'your', 'be', 'at', 'with',
+  };
+
+  static Set<String> _words(String s) => _clean(s)
+      .trim()
+      .split(' ')
+      .where((w) => w.length > 1 && !_stop.contains(w))
+      .toSet();
+
+  /// Best owner-approved answer for [message], or null if none is close enough.
+  static String? _approvedAnswer(String message) {
+    final mine = _words(message);
+    if (mine.isEmpty) return null;
+    String? best;
+    double bestScore = 0;
+    for (final a in _approved) {
+      final q = _words((a['question'] ?? '').toString());
+      final ans = (a['answer'] ?? '').toString().trim();
+      if (q.isEmpty || ans.isEmpty) continue;
+      final shared = mine.intersection(q).length;
+      // share of the saved question's words that the customer also used
+      final score = shared / q.length;
+      if (shared >= 1 && score > bestScore) {
+        bestScore = score;
+        best = ans;
+      }
+    }
+    return bestScore >= 0.6 ? best : null;
+  }
+
   static String _clean(String s) =>
       ' ${s.toLowerCase().replaceAll(RegExp(r"[^a-z0-9' ]"), ' ').replaceAll(RegExp(r'\s+'), ' ').trim()} ';
 
@@ -106,6 +172,13 @@ class SupportBot {
         'No problem, I am connecting you to the owner now. She will reply here as soon as she can.',
         escalate: true,
       );
+    }
+
+    // Owner-approved answers come first, so her corrections beat the built-in ones.
+    await _loadApproved();
+    final approved = _approvedAnswer(message);
+    if (approved != null) {
+      return BotReply(approved, suggestions: const ['Speak to the owner']);
     }
 
     // Small talk
@@ -144,7 +217,7 @@ class SupportBot {
     }
 
     if (best.id == 'order') return _orderStatus();
-    return BotReply(best.answer, suggestions: best.related);
+    return BotReply(_overrides[best.id] ?? best.answer, suggestions: best.related);
   }
 
   static Future<BotReply> _orderStatus() async {
