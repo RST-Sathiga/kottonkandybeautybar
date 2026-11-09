@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 
 class AdminNotificationService {
@@ -9,7 +10,7 @@ class AdminNotificationService {
     required String targetUserId,
     required String title,
     required String body,
-    required String type, // 'message_reply', 'payment', 'delivery', 'booking', 'promotion', 'new_item'
+    required String type, // 'message_reply', 'payment', 'delivery', 'booking', 'promotion', 'new_item', 'order_status'
     String? route,
   }) async {
     final userDoc = await _db.collection('users').doc(targetUserId).get();
@@ -68,6 +69,64 @@ class AdminNotificationService {
         type: 'new_item',
         route: route,
       );
+    }
+  }
+
+  /// Sends an in-app and push notification to the client when their order status changes.
+  Future<void> sendOrderStatusNotification({
+    required String targetUserId,
+    required String orderId,
+    required String status, // e.g., 'Processing', 'Shipped', 'Delivered', 'Cancelled'
+    String? route,
+  }) async {
+    final title = 'Order Status Updated';
+    final body = 'Your order #$orderId is now $status.';
+
+    await sendNotificationToUser(
+      targetUserId: targetUserId,
+      title: title,
+      body: body,
+      type: 'order_status',
+      route: route ?? '/orders/$orderId',
+    );
+  }
+
+  /// Notifies the admin side of a refund request in Firestore AND
+  /// triggers an immediate direct email via Firebase Cloud Functions (Callable).
+  Future<void> notifyAdminRefund({
+    required String adminEmail,
+    required String orderId,
+    required double amount,
+    required String reason,
+  }) async {
+    try {
+      // 1. Add notification to the admin-side inbox collection in Firestore (for badge counting & dashboard logs)
+      await _db.collection('admin_notifications').add({
+        'type': 'refund_request',
+        'title': 'New Refund Requested',
+        'body': 'Order #$orderId requested a refund of R$amount. Reason: $reason',
+        'read': false,
+        'status': 'requested', // Used by badge streams if needed
+        'createdAt': FieldValue.serverTimestamp(),
+        'data': {
+          'orderId': orderId,
+          'amount': amount,
+          'reason': reason,
+        },
+      });
+
+      // 2. Directly trigger the Cloud Function to send the email immediately
+      final callable = FirebaseFunctions.instance.httpsCallable('sendAdminRefundEmail');
+      final response = await callable.call({
+        'adminEmail': adminEmail,
+        'orderId': orderId,
+        'amount': amount,
+        'reason': reason,
+      });
+
+      debugPrint("Admin refund logged and email sent successfully: ${response.data}");
+    } catch (e) {
+      debugPrint("Error in notifyAdminRefund: $e");
     }
   }
 }
